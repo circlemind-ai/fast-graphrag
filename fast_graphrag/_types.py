@@ -97,31 +97,39 @@ def dump_to_csv(
     with_index: bool = False,
     **values: List[Any],
 ) -> str:
-    index_field = ["id"] if with_index else []
+    # index_field = ["id"] if with_index else []
+    # rows = chain(
+    #     (separator.join(chain(index_field, fields, values.keys())),) if with_header else (),
+    #     chain(
+    #         separator.join(
+    #             chain(
+    #                 (str(i + 1),),
+    #                 (str(getattr(d, field)) for field in fields),
+    #                 (str(v) for v in vs),
+    #             )
+    #         )
+    #         for i, (d, *vs) in enumerate(zip(data, *values.values()))
+    #     )
+    #     if with_index
+    #     else chain(
+    #         separator.join(
+    #             chain(
+    #                 (str(getattr(d, field)) for field in fields),
+    #                 (str(v) for v in vs),
+    #             )
+    #         )
+    #         for (d, *vs) in zip(data, *values.values())
+    #     ),
+    # )
+    # return "\n".join(["```csv", *rows, "```"])
     rows = chain(
-        (separator.join(chain(index_field, fields, values.keys())),) if with_header else (),
+        (separator.join(chain(fields, values.keys())),) if with_header else (),
         chain(
-            separator.join(
-                chain(
-                    (str(i + 1),),
-                    (str(getattr(d, field)) for field in fields),
-                    (str(v) for v in vs),
-                )
-            )
-            for i, (d, *vs) in enumerate(zip(data, *values.values()))
-        )
-        if with_index
-        else chain(
-            separator.join(
-                chain(
-                    (str(getattr(d, field)) for field in fields),
-                    (str(v) for v in vs),
-                )
-            )
-            for (d, *vs) in zip(data, *values.values())
+            separator.join(chain((str(getattr(d, field)).replace("\n", "  ") for field in fields), (str(v) for v in vs)))
+            for d, *vs in zip(data, *values.values())
         ),
     )
-    return "\n".join(["```csv", *rows, "```"])
+    return "\n".join(rows)
 
 
 # Embedding types
@@ -302,37 +310,36 @@ class TContext(Generic[GTNode, GTEdge, GTHash, GTChunk]):
         if len(self.entities):
             data.extend(
                 [
-                    "# Entities",
+                    "#Entities",
                     dump_to_csv(self.entities, ["name", "description"], with_header=True),
                     "\n",
                 ]
             )
         else:
-            data.append("# Entities: None\n")
+            data.append("#Entities: None\n")
 
         if len(self.relationships):
             data.extend(
                 [
-                    "# Relationships",
+                    "#Relationships",
                     dump_to_csv(self.relationships, ["source", "target", "description"], with_header=True),
                     "\n",
                 ]
             )
         else:
-            data.append("# Relationships: None\n")
+            data.append("#Relationships: None\n")
 
         if len(self.chunks):
             data.extend(
                 [
-                    "# Sources",
+                    "#Sources",
                     dump_to_csv(self.chunks, ["content"], with_header=True, with_index=True),
                     "\n",
                 ]
             )
         else:
-            data.append("# Sources: None\n")
+            data.append("#Sources: None\n")
         context = "\n".join(data)
-        print(len(context))
 
         return context
 

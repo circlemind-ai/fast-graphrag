@@ -125,7 +125,7 @@ class BaseGraphRAG(Generic[GTEmbedding, GTHash, GTChunk, GTNode, GTEdge, GTId]):
         try:
             # Extract entities from query
             extracted_entities = await self.information_extraction_service.extract_entities_from_query(
-                llm=self.llm_service, query=query, prompt_kwargs={}
+                llm=self.llm_service, query=query, prompt_kwargs={"domain": self.domain}
             )
 
             # Retrieve relevant state

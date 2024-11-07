@@ -129,7 +129,7 @@ class NodeUpsertPolicy_SummarizeDescription(BaseNodeUpsertPolicy[TEntity, TId]):
             # Resolve descriptions
             node_description = "\n".join((node.description for node in nodes))
 
-            if len(node_description) > self.config.max_node_description_size:
+            if len(node_description) > self.config.max_node_description_size * TOKEN_TO_CHAR_RATIO:
                 node_description = await summarize_entity_description(
                     self.config.node_summarization_prompt,
                     node_description,
@@ -142,7 +142,7 @@ class NodeUpsertPolicy_SummarizeDescription(BaseNodeUpsertPolicy[TEntity, TId]):
             # Resolve types (pick most frequent)
             node_type = Counter((node.type for node in nodes)).most_common(1)[0][0]
 
-            node = TEntity(name=node_id, description=node_description.replace("\n", " "), type=node_type)
+            node = TEntity(name=node_id, description=node_description.replace("\n", "  "), type=node_type)
             index = await target.upsert_node(node=node, node_index=index)
 
             upserted.append((index, node))
@@ -290,7 +290,7 @@ class EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM(BaseEdgeUpsertPolicy[TRel
 
             first_index = relation_indices[0]
             edge, index = map_incremental_to_edge[first_index]
-            edge.description = edges_group.description.replace("\n", " ")
+            edge.description = edges_group.description.replace("\n", "  ")
             visited_edges[first_index] = None  # None means it was visited but not marked for deletion.
             if edge.chunks:
                 chunks.update(edge.chunks)
