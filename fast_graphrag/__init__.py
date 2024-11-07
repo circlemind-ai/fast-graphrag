@@ -75,11 +75,11 @@ class GraphRAG(BaseGraphRAG[TEmbedding, THash, TChunk, TEntity, TRelation, TId])
         entity_ranking_policy: RankingPolicy_WithThreshold = field(
             default_factory=lambda: RankingPolicy_WithThreshold(RankingPolicy_WithThreshold.Config(threshold=0.05))
         )
-        relation_ranking_policy: RankingPolicy_TopK = field(
-            default_factory=lambda: RankingPolicy_TopK(RankingPolicy_TopK.Config(top_k=10))
-        )
+        # relation_ranking_policy: RankingPolicy_TopK = field(
+        #     default_factory=lambda: RankingPolicy_TopK(RankingPolicy_WithThreshold.Config(threshold=0.05))
+        # )
         chunk_ranking_policy: RankingPolicy_TopK = field(
-            default_factory=lambda: RankingPolicy_TopK(RankingPolicy_TopK.Config(top_k=20))
+            default_factory=lambda: RankingPolicy_TopK(RankingPolicy_TopK.Config(top_k=10))
         )
         node_upsert_policy: NodeUpsertPolicy_SummarizeDescription = field(
             default_factory=lambda: NodeUpsertPolicy_SummarizeDescription()

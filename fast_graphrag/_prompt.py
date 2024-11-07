@@ -110,19 +110,14 @@ PROMPTS["entity_relationship_gleaning_done_extraction"] = "Retrospectively check
 PROMPTS["entity_extraction_query"] = """You are a helpful assistant that helps a human analyst identify all the named entities present in the input query, as well as general concepts that may be important for answering the query.
 Each element you extract will be used to search a knowledge base to gather relevant information to answer the query.
 
-# DOMAIN
-{domain}
-
 # GOAL
 Given the input query and the given domain, identify all named entities and concepts present in the query.
 
 # EXAMPLE
-Domain: Magazines
 Query: Which magazine was started first: Arthur's Magazine or First for Women?
 Ouput: {{"entities": ["Magazine releases", "First for Women", "Arthur's Magazine"], "n": 3}}
 
 # INPUT
-Domain: {domain}
 Query: {query}
 Output:
 """
@@ -131,9 +126,9 @@ Output:
 PROMPTS[
     "summarize_entity_descriptions"
 ] = """You are a helpful assistant responsible for generating a comprehensive summary of the data provided below.
-Given the current description, summarize it in a shorter but comprehensive description. Make sure to include all important information.
+Given the current description, summarize it in a shorter but comprehensive description. Prioritize properties and qualities that are unique or essential to the entity, and avoid redundant or irrelevant details.
 If the provided description is contradictory, please resolve the contradictions and provide a single, coherent summary.
-Make sure it is written in third person, and include the entity names so we the have full context.
+Make sure it is written in third person, and include the entity names so we have full context.
 
 Current description:
 {description}

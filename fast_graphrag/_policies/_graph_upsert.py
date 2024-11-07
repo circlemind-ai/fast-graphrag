@@ -1,4 +1,5 @@
 import asyncio
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import chain
@@ -9,17 +10,27 @@ from fast_graphrag._llm._llm_openai import BaseLLMService
 from fast_graphrag._prompt import PROMPTS
 from fast_graphrag._storage._base import BaseGraphStorage
 from fast_graphrag._types import GTEdge, GTId, GTNode, TEditRelationList, TEntity, THash, TId, TIndex, TRelation
-from fast_graphrag._utils import logger
+from fast_graphrag._utils import TOKEN_TO_CHAR_RATIO, logger
 
 from ._base import BaseEdgeUpsertPolicy, BaseGraphUpsertPolicy, BaseNodeUpsertPolicy
 
+_summary_replace_re = re.compile(f"({'|'.join(re.escape(s) for s in ["\n", ".", "。", "!", "！"])})")
+
+
+def _trunc_description(description: str, max_len: int) -> str:
+    """Truncate the description to the given number of tokens."""
+    if len(description) <= max_len:
+        return description
+    return (
+        description[: max_len]
+        + _summary_replace_re.split(description[max_len :], 1)[0]
+    )
+
 
 async def summarize_entity_description(
-    prompt: str, description: str, llm: BaseLLMService, max_tokens: Optional[int] = None
+    prompt: str, description: str, llm: BaseLLMService, max_len: Optional[int] = None
 ) -> str:
     """Summarize the given entity description."""
-    if max_tokens is not None:
-        raise NotImplementedError("Summarization with max tokens is not yet supported.")
     # Prompt
     entity_description_summarization_prompt = prompt
 
@@ -28,9 +39,11 @@ async def summarize_entity_description(
         description=description
     )
     new_description, _ = await llm.send_message(
-        prompt=formatted_entity_description_summarization_prompt, response_model=str, max_tokens=max_tokens
+        prompt=formatted_entity_description_summarization_prompt, response_model=str
     )
 
+    if max_len:
+        return _trunc_description(new_description, max_len)
     return new_description
 
 
@@ -97,7 +110,7 @@ class NodeUpsertPolicy_SummarizeDescription(BaseNodeUpsertPolicy[TEntity, TId]):
     @dataclass
     class Config:
         max_node_description_size: int = field(default=512)
-        node_summarization_ratio: float = field(default=0.5)
+        # node_summarization_ratio: float = field(default=0.5)
         node_summarization_prompt: str = field(default=PROMPTS["summarize_entity_descriptions"])
         is_async: bool = field(default=True)
 
@@ -121,17 +134,15 @@ class NodeUpsertPolicy_SummarizeDescription(BaseNodeUpsertPolicy[TEntity, TId]):
                     self.config.node_summarization_prompt,
                     node_description,
                     llm,
-                    # int(
-                    #     self.config.max_node_description_size
-                    #     * self.config.node_summarization_ratio
-                    #     / TOKEN_TO_CHAR_RATIO
-                    # ),
+                    max_len = int(
+                        self.config.max_node_description_size * TOKEN_TO_CHAR_RATIO
+                    ),
                 )
 
             # Resolve types (pick most frequent)
             node_type = Counter((node.type for node in nodes)).most_common(1)[0][0]
 
-            node = TEntity(name=node_id, description=node_description, type=node_type)
+            node = TEntity(name=node_id, description=node_description.replace("\n", " "), type=node_type)
             index = await target.upsert_node(node=node, node_index=index)
 
             upserted.append((index, node))
@@ -279,7 +290,7 @@ class EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM(BaseEdgeUpsertPolicy[TRel
 
             first_index = relation_indices[0]
             edge, index = map_incremental_to_edge[first_index]
-            edge.description = edges_group.description
+            edge.description = edges_group.description.replace("\n", " ")
             visited_edges[first_index] = None  # None means it was visited but not marked for deletion.
             if edge.chunks:
                 chunks.update(edge.chunks)

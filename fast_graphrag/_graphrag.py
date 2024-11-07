@@ -12,7 +12,7 @@ from fast_graphrag._services._information_extraction import BaseInformationExtra
 from fast_graphrag._services._state_manager import BaseStateManagerService
 from fast_graphrag._storage._base import BaseGraphStorage, BaseIndexedKeyValueStorage, BaseVectorStorage
 from fast_graphrag._types import GTChunk, GTEdge, GTEmbedding, GTHash, GTId, GTNode, TContext, TDocument, TQueryResponse
-from fast_graphrag._utils import get_event_loop, logger
+from fast_graphrag._utils import TOKEN_TO_CHAR_RATIO, get_event_loop, logger
 
 
 @dataclass
@@ -23,6 +23,7 @@ class BaseGraphRAG(Generic[GTEmbedding, GTHash, GTChunk, GTNode, GTEdge, GTId]):
     domain: str = field()
     example_queries: str = field()
     entity_types: List[str] = field()
+    max_context_tokens: int = field(default=0)
 
     llm_service: BaseLLMService = field(init=False, default_factory=lambda: BaseLLMService())
     chunking_service: BaseChunkingService[GTChunk] = field(init=False, default_factory=lambda: BaseChunkingService())
@@ -124,21 +125,24 @@ class BaseGraphRAG(Generic[GTEmbedding, GTHash, GTChunk, GTNode, GTEdge, GTId]):
         try:
             # Extract entities from query
             extracted_entities = await self.information_extraction_service.extract_entities_from_query(
-                llm=self.llm_service, query=query, prompt_kwargs={"domain": self.domain}
+                llm=self.llm_service, query=query, prompt_kwargs={}
             )
 
             # Retrieve relevant state
             relevant_state = await self.state_manager.get_context(entities=extracted_entities)
             if relevant_state is None:
                 return TQueryResponse[GTNode, GTEdge, GTHash, GTChunk](
-                    response=PROMPTS["fail_response"], context=TContext([], [], [])
+                    response=PROMPTS["fail_response"], context=TContext([], [], [], [], [], [])
                 )
 
             # Ask LLM
             llm_response, _ = await format_and_send_prompt(
                 prompt_key="generate_response_query",
                 llm=self.llm_service,
-                format_kwargs={"query": query, "context": relevant_state.to_str()},
+                format_kwargs={
+                    "query": query,
+                    "context": relevant_state.to_str(max_len=self.max_context_tokens * TOKEN_TO_CHAR_RATIO),
+                },
                 response_model=str,
             )
 

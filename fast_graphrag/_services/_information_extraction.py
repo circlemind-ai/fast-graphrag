@@ -124,8 +124,12 @@ class DefaultInformationExtractionService(BaseInformationExtractionService[TChun
         if chunk_graph_with_gleaning:
             chunk_graph = chunk_graph_with_gleaning
 
+        for entity in chunk_graph.entities:
+            entity.description = entity.description.replace("\n", " ")
+
         # Assign chunk ids to relationships
         for relationship in chunk_graph.relationships:
+            relationship.description = relationship.description.replace("\n", " ")
             relationship.chunks = [chunk.id]
 
         return chunk_graph

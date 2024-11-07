@@ -61,6 +61,9 @@ class DefaultChunkingService(BaseChunkingService[TChunk]):
         return chunks_per_data
 
     async def _extract_chunks(self, data: TDocument) -> List[TChunk]:
+        # Sanitize input
+        data.data = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", data.data)
+
         if len(data.data) <= self._chunk_size:
             chunks = [data.data]
         else:

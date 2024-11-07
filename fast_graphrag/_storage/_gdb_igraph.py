@@ -16,7 +16,7 @@ from ._base import BaseGraphStorage
 class IGraphStorageConfig(Generic[GTNode, GTEdge]):
     node_cls: Type[GTNode] = field()
     edge_cls: Type[GTEdge] = field()
-    ppr_damping: float = field(default=0.85)
+    ppr_damping: float = field(default=0.8)
 
 
 @dataclass

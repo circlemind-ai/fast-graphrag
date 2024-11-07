@@ -14,16 +14,7 @@ from fast_graphrag._storage._base import (
 )
 from fast_graphrag._storage._blob_pickle import PickleBlobStorage
 from fast_graphrag._storage._namespace import Workspace
-from fast_graphrag._types import (
-    TChunk,
-    TContext,
-    TEmbedding,
-    TEntity,
-    THash,
-    TId,
-    TRelation,
-    TScore,
-)
+from fast_graphrag._types import TChunk, TContext, TEmbedding, TEntity, THash, TId, TRelation
 from fast_graphrag._utils import csr_from_indices_list, extract_sorted_scores, logger
 
 from ._base import BaseStateManagerService
@@ -126,36 +117,46 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
 
         try:
             # All score vectors should be row vectors
-            indices, scores = extract_sorted_scores(graph_entity_scores)
-            relevant_entities: List[Tuple[TEntity, TScore]] = []
-            for i, s in zip(indices, scores):
+            indices, s_entity_scores = extract_sorted_scores(graph_entity_scores)
+            s_entity_scores /= np.max(s_entity_scores)  # Normalise scores
+            relevant_entities: List[TEntity] = []
+            for i in indices:
                 entity = await self.graph_storage.get_node_by_index(i)
                 if entity is not None:
-                    relevant_entities.append((entity, s))
+                    relevant_entities.append(entity)
 
             # Extract relevant relationships
             relation_scores = self.relation_ranking_policy(
                 await self._score_relationships_by_entities(entity_scores=graph_entity_scores)
             )
 
-            indices, scores = extract_sorted_scores(relation_scores)
-            relevant_relationships: List[Tuple[TRelation, TScore]] = []
-            for i, s in zip(indices, scores):
+            indices, s_relation_scores = extract_sorted_scores(relation_scores)
+            s_relation_scores /= np.max(s_relation_scores)  # Normalise scores
+            relevant_relationships: List[TRelation] = []
+            for i in indices:
                 relationship = await self.graph_storage.get_edge_by_index(i)
                 if relationship is not None:
-                    relevant_relationships.append((relationship, s))
+                    relevant_relationships.append(relationship)
 
             # Extract relevant chunks
             chunk_scores = self.chunk_ranking_policy(
                 await self._score_chunks_by_relations(relationships_score=relation_scores)
             )
-            indices, scores = extract_sorted_scores(chunk_scores)
-            relevant_chunks: List[Tuple[TChunk, TScore]] = []
-            for chunk, s in zip(await self.chunk_storage.get_by_index(indices), scores):
+            indices, s_chunk_scores = extract_sorted_scores(chunk_scores)
+            s_chunk_scores /= np.max(s_chunk_scores)  # Normalise scores
+            relevant_chunks: List[TChunk] = []
+            for chunk in await self.chunk_storage.get_by_index(indices):
                 if chunk is not None:
-                    relevant_chunks.append((chunk, s))
+                    relevant_chunks.append(chunk)
 
-            return TContext(entities=relevant_entities, relationships=relevant_relationships, chunks=relevant_chunks)
+            return TContext(
+                entities=relevant_entities,
+                relationships=relevant_relationships,
+                chunks=relevant_chunks,
+                entity_scores=s_entity_scores.tolist(),
+                relationship_scores=s_relation_scores.tolist(),
+                chunk_scores=s_chunk_scores.tolist(),
+            )
         except Exception as e:
             logger.error(f"Error during scoring of chunks and relationships.\n{e}")
             raise e
@@ -217,11 +218,13 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
             self._relationships_to_chunks,
             self._entities_to_relationships,
         ]
+
         def _fn():
             tasks: List[Awaitable[Any]] = []
             for storage_inst in storages:
                 tasks.append(storage_inst.query_start())
             return asyncio.gather(*tasks)
+
         await self._workspace.with_checkpoints(_fn)
 
         for storage_inst in storages:
@@ -251,11 +254,13 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
             self._relationships_to_chunks,
             self._entities_to_relationships,
         ]
+
         def _fn():
             tasks: List[Awaitable[Any]] = []
             for storage_inst in storages:
                 tasks.append(storage_inst.insert_start())
             return asyncio.gather(*tasks)
+
         await self._workspace.with_checkpoints(_fn)
 
         for storage_inst in storages:
