@@ -109,7 +109,7 @@ class DefaultGraphUpsertPolicy(BaseGraphUpsertPolicy[GTNode, GTEdge, GTId]):  # 
 class NodeUpsertPolicy_SummarizeDescription(BaseNodeUpsertPolicy[TEntity, TId]):  # noqa: N801
     @dataclass
     class Config:
-        max_node_description_size: int = field(default=512)
+        max_node_description_tokens: int = field(default=512)
         # node_summarization_ratio: float = field(default=0.5)
         node_summarization_prompt: str = field(default=PROMPTS["summarize_entity_descriptions"])
         is_async: bool = field(default=True)
@@ -129,13 +129,13 @@ class NodeUpsertPolicy_SummarizeDescription(BaseNodeUpsertPolicy[TEntity, TId]):
             # Resolve descriptions
             node_description = "\n".join((node.description for node in nodes))
 
-            if len(node_description) > self.config.max_node_description_size * TOKEN_TO_CHAR_RATIO:
+            if len(node_description) > self.config.max_node_description_tokens * TOKEN_TO_CHAR_RATIO:
                 node_description = await summarize_entity_description(
                     self.config.node_summarization_prompt,
                     node_description,
                     llm,
                     max_len = int(
-                        self.config.max_node_description_size * TOKEN_TO_CHAR_RATIO
+                        self.config.max_node_description_tokens * TOKEN_TO_CHAR_RATIO
                     ),
                 )
 

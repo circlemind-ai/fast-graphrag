@@ -86,7 +86,8 @@ class HNSWVectorStorage(BaseVectorStorage[GTId, GTEmbedding]):
 
         if embeddings.size == 0 or self._current_elements == 0:
             logger.warning(
-                f"No provided embeddings ({embeddings.size}) or empty index ({self._current_elements})."
+                f"No provided embeddings ({int(embeddings.size / self.embedding_dim)})"
+                " or empty index ({self._current_elements})."
             )
             return csr_matrix((0, self._current_elements))
 

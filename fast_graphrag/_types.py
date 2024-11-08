@@ -97,39 +97,31 @@ def dump_to_csv(
     with_index: bool = False,
     **values: List[Any],
 ) -> str:
-    # index_field = ["id"] if with_index else []
-    # rows = chain(
-    #     (separator.join(chain(index_field, fields, values.keys())),) if with_header else (),
-    #     chain(
-    #         separator.join(
-    #             chain(
-    #                 (str(i + 1),),
-    #                 (str(getattr(d, field)) for field in fields),
-    #                 (str(v) for v in vs),
-    #             )
-    #         )
-    #         for i, (d, *vs) in enumerate(zip(data, *values.values()))
-    #     )
-    #     if with_index
-    #     else chain(
-    #         separator.join(
-    #             chain(
-    #                 (str(getattr(d, field)) for field in fields),
-    #                 (str(v) for v in vs),
-    #             )
-    #         )
-    #         for (d, *vs) in zip(data, *values.values())
-    #     ),
-    # )
-    # return "\n".join(["```csv", *rows, "```"])
+    index_field = ["id"] if with_index else []
     rows = chain(
-        (separator.join(chain(fields, values.keys())),) if with_header else (),
+        (separator.join(chain(index_field, fields, values.keys())),) if with_header else (),
         chain(
-            separator.join(chain((str(getattr(d, field)).replace("\n", "  ") for field in fields), (str(v) for v in vs)))
-            for d, *vs in zip(data, *values.values())
+            separator.join(
+                chain(
+                    (str(i + 1),),
+                    (str(getattr(d, field)).replace("\n", "  ") for field in fields),
+                    (str(v) for v in vs),
+                )
+            )
+            for i, (d, *vs) in enumerate(zip(data, *values.values()))
+        )
+        if with_index
+        else chain(
+            separator.join(
+                chain(
+                    (str(getattr(d, field)).replace("\n", "  ") for field in fields),
+                    (str(v) for v in vs),
+                )
+            )
+            for (d, *vs) in zip(data, *values.values())
         ),
     )
-    return "\n".join(rows)
+    return "\n".join(["```csv", *rows, "```"])
 
 
 # Embedding types

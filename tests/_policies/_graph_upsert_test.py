@@ -36,7 +36,7 @@ class TestNodeUpsertPolicy_SummarizeDescription(unittest.IsolatedAsyncioTestCase
         # Create policy instance
         policy = NodeUpsertPolicy_SummarizeDescription(
             config=NodeUpsertPolicy_SummarizeDescription.Config(
-                max_node_description_size=len(node1.description) + 4,
+                max_node_description_tokens=len(node1.description) + 4,
             )
         )
 
@@ -65,7 +65,7 @@ class TestNodeUpsertPolicy_SummarizeDescription(unittest.IsolatedAsyncioTestCase
         # Create policy instance
         policy = NodeUpsertPolicy_SummarizeDescription(
             config=NodeUpsertPolicy_SummarizeDescription.Config(
-                max_node_description_size=(len(node1.description) * 2) + 4
+                max_node_description_tokens=(len(node1.description) * 2)
             )
         )
 
@@ -100,7 +100,7 @@ class TestNodeUpsertPolicy_SummarizeDescription(unittest.IsolatedAsyncioTestCase
         # Create policy instance
         policy = NodeUpsertPolicy_SummarizeDescription(
             config=NodeUpsertPolicy_SummarizeDescription.Config(
-                max_node_description_size=len(node1.description) + 4,
+                max_node_description_tokens=len(node1.description),
             )
         )
 
