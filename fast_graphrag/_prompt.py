@@ -19,7 +19,16 @@ Examples of possible questions:
 
 # STEPS
 1. Identify all entities of the given types. Make sure to extract all and only the entities that are of one of the given types, ignore the others. Use singular names and split compound concepts when necessary (for example, from the sentence "they are movie and theater directors", you should extract the entities "movie director" and "theater director").
-2. Identify all relationships between the entities found in step 1. Clearly resolve pronouns to their specific names to maintain clarity.
+2. Identify all relationships between the entities found in step 1. Clearly resolve pronouns to their specific names to maintain clarity. For each pair of related entities, extract the following information:
+    - source: Name of the source entity, as identified in step 1.
+    - target: Name of the target entity, as identified in step 1.
+    - descriptiop: Explanation of why the source entity and the target entity are related to each other.
+    - strength: A numeric score (from 1 to 10) indicating the strength of the relationship between the source entity and target entity, where:
+        - 1-3 = Weak relationship (minimal interaction or casual connection).
+        - 4-6 = Moderate relationship (some ongoing connection or relevant context).
+        - 7-9 = Strong relationship (consistent and impactful interactions).
+        - 10 = Very strong relationship (critical, foundational, or highly impactful interactions).
+    - keywords: One or more high-level keywords that summarize the overarching nature of the relationship, focusing on concepts or themes rather than specific details.
 3. Double check that each entity identified in step 1 appears in at least one relationship. If not, add the missing relationships.
 
 # EXAMPLE DATA
