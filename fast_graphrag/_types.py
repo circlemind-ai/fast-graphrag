@@ -95,8 +95,8 @@ class TChunk(BTChunk):
 @dataclass
 class TEntity(BaseModelAlias, BTNode):
     name: str = field()
-    type: str = Field()
-    description: str = Field()
+    type: str = field()
+    description: str = field()
 
     def to_str(self) -> str:
         s = f"[NAME] {self.name}"
@@ -129,6 +129,7 @@ class TRelation(BaseModelAlias, BTEdge):
     source: str = field()
     target: str = field()
     description: str = field()
+    keywords: List[str] = field()
     chunks: List[THash] | None = field(default=None)
 
     @staticmethod
@@ -142,6 +143,7 @@ class TRelation(BaseModelAlias, BTEdge):
             assert edges is None, "Either edge or edges should be provided, not both"
             return {
                 "description": edge.description,
+                "keywords": edge.keywords,
                 "chunks": edge.chunks,
                 **(
                     {
@@ -155,6 +157,7 @@ class TRelation(BaseModelAlias, BTEdge):
         elif edges is not None:
             return {
                 "description": [e.description for e in edges],
+                "keywords": [e.keywords for e in edges],
                 "chunks": [e.chunks for e in edges],
                 **(
                     {
@@ -171,11 +174,13 @@ class TRelation(BaseModelAlias, BTEdge):
     class Model(BaseModelAlias.Model, alias="Relationship"):
         source: str = Field(..., description="Name of the source entity")
         target: str = Field(..., description="Name of the target entity")
+        keywords: List[str] = Field(..., description="Keywords associated with the relationship")
+        # alternative description "Explanation of why the source entity and the target entity are related to each other"
         desc: str = Field(..., description="Description of the relationship between the source and target entity")
 
         @staticmethod
         def to_dataclass(pydantic: "TRelation.Model") -> "TRelation":
-            return TRelation(source=pydantic.source, target=pydantic.target, description=pydantic.desc)
+            return TRelation(source=pydantic.source, target=pydantic.target, keywords=pydantic.keywords, description=pydantic.desc)
 
         @field_validator("source", mode="before")
         @classmethod

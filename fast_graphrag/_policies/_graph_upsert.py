@@ -281,6 +281,7 @@ class EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM(BaseEdgeUpsertPolicy[TRel
                 continue
 
             chunks: Set[THash] = set()
+            keywords: Set[str] = set()
 
             for second in relation_indices[1:]:
                 edge, index = map_incremental_to_edge[second]
@@ -291,14 +292,21 @@ class EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM(BaseEdgeUpsertPolicy[TRel
                     visited_edges[second] = index
                 if edge.chunks:
                     chunks.update(edge.chunks)
+                keywords.update(edge.keywords)
 
             first_index = relation_indices[0]
             edge, index = map_incremental_to_edge[first_index]
             edge.description = edges_group.description.replace("\n", "  ")
             visited_edges[first_index] = None  # None means it was visited but not marked for deletion.
+
+            # Update chunks
             if edge.chunks:
                 chunks.update(edge.chunks)
             edge.chunks = list(chunks)
+
+            # Update keywords
+            keywords.update(edge.keywords)
+            edge.keywords = list(keywords)
             if index is not None:
                 updated_edges.append((await target.upsert_edge(edge, index), edge))
             else:
