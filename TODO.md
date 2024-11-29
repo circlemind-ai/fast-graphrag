@@ -16,4 +16,7 @@ However, it would be impractical (and extremely costly) to embed (at insertion t
 ### Implementative thoughts
 
 Some thoughts:
-- we do not want too many tags (#edges  << #tags) otherwise we could just embed the edges. How can we achieve this? We need to somehow incrementally cluster new tags with existing ones.
+- we do not want too many tags (#edges << #tags) otherwise we could just embed the edges. How can we achieve this? We need to somehow incrementally cluster new tags with existing ones.
+- everything must maintain full parallelism: right now we process all chunks in parallel => get a list of all new nodes and edges => insert them in parallel.
+
+A way to approach this could be: first we need to cluster all new extracted tags between themselves, then insert them in the "tag vectorDB" only if they are different enough from what is already in it.
