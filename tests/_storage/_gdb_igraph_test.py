@@ -28,7 +28,11 @@ class TestIGraphStorage(unittest.IsolatedAsyncioTestCase):
     async def test_get_node(self):
         node = MagicMock()
         node.name = "node1"
-        node.attributes.return_value = {"name": "foo", "description": "value"}
+        node.attributes.return_value = {
+            "name": "foo", 
+            "description": "value",
+            "type": "some_entity_type"
+        }
         self.storage._graph.vs.find.return_value = node
 
         result = await self.storage.get_node("node1")
@@ -42,11 +46,11 @@ class TestIGraphStorage(unittest.IsolatedAsyncioTestCase):
     async def test_get_edges(self):
         self.storage.get_edge_indices = AsyncMock(return_value=[0, 1])
         self.storage.get_edge_by_index = AsyncMock(
-            side_effect=[TRelation(source="node1", target="node2", description="txt"), None]
+            side_effect=[TRelation(source="node1", target="node2", description="txt", keywords=["Keyword1", "Keyword2"]), None]
         )
 
         edges = await self.storage.get_edges("node1", "node2")
-        self.assertEqual(edges, [(TRelation(source="node1", target="node2", description="txt"), 0)])
+        self.assertEqual(edges, [(TRelation(source="node1", target="node2", description="txt", keywords=["Keyword1", "Keyword2"]), 0)])
 
     async def test_get_edge_indices(self):
         self.storage._graph.vs.find.side_effect = lambda name: MagicMock(index=name)
@@ -57,7 +61,11 @@ class TestIGraphStorage(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_node_by_index(self):
         node = MagicMock()
-        node.attributes.return_value = {"name": "foo", "description": "value"}
+        node.attributes.return_value = {
+            "name": "foo", 
+            "description": "value",
+            "type": "some_entity_type"
+        }
         self.storage._graph.vs.__getitem__.return_value = node
         self.storage._graph.vcount.return_value = 1
 
@@ -68,7 +76,7 @@ class TestIGraphStorage(unittest.IsolatedAsyncioTestCase):
         edge = MagicMock()
         edge.source = "node0"
         edge.target = "node1"
-        edge.attributes.return_value = {"description": "value"}
+        edge.attributes.return_value = {"description": "value", "keywords": ["Keyword1", "Keyword2"]}
         self.storage._graph.es.__getitem__.return_value = edge
         self.storage._graph.vs.__getitem__.side_effect = lambda idx: {"name": idx}
         self.storage._graph.ecount.return_value = 1
@@ -77,7 +85,7 @@ class TestIGraphStorage(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, TRelation(source="node0", target="node1", **edge.attributes()))
 
     async def test_upsert_node(self):
-        node = TEntity(name="node1", description="value")
+        node = TEntity(name="node1", description="value", type="node type")
         self.storage._graph.vcount.return_value = 1
         self.storage._graph.vs.__getitem__.return_value = MagicMock(index=0)
 
@@ -85,7 +93,13 @@ class TestIGraphStorage(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(index, 0)
 
     async def test_upsert_edge(self):
-        edge = TRelation(source="node1", target="node2", description="desc", chunks=[])
+        edge = TRelation(
+            source="node1",
+            target="node2",
+            description="desc",
+            chunks=[],
+            keywords=[] 
+        )
         self.storage._graph.ecount.return_value = 1
         self.storage._graph.es.__getitem__.return_value = MagicMock(index=0)
 

@@ -39,13 +39,17 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(asdict(entity), asdict(pydantic_entity.to_dataclass(pydantic_entity)))
 
     def test_trelation(self):
-        relation = TRelation(source="Entity1", target="Entity2", description="Relation description")
+        relation = TRelation(
+            source="Entity1", target="Entity2", description="Relation description", 
+            keywords=["Keyword1", "Keyword2"]
+        )
         self.assertEqual(relation.source, "Entity1")
         self.assertEqual(relation.target, "Entity2")
         self.assertEqual(relation.description, "Relation description")
+        self.assertEqual(relation.keywords, ["Keyword1", "Keyword2"]) 
 
         pydantic_relation = TRelation.Model(
-            source="Entity1", target="Entity2", desc="Relation description"
+            source="Entity1", target="Entity2", desc="Relation description", keywords=["Keyword1", "Keyword2"]
         )
 
         relation.source = relation.source.upper()
@@ -54,7 +58,10 @@ class TestTypes(unittest.TestCase):
 
     def test_tgraph(self):
         entity = TEntity(name="Entity1", type="Type1", description="Description1")
-        relation = TRelation(source="Entity1", target="Entity2", description="Relation description")
+        relation = TRelation(
+            source="Entity1", target="Entity2", description="Relation description", 
+            keywords=["Keyword1", "Keyword2"]
+        )
         graph = TGraph(entities=[entity], relationships=[relation])
         self.assertEqual(graph.entities, [entity])
         self.assertEqual(graph.relationships, [relation])
@@ -62,7 +69,10 @@ class TestTypes(unittest.TestCase):
         pydantic_graph = TGraph.Model(
             entities=[TEntity.Model(name="Entity1", type="Type1", desc="Description1")],
             relationships=[
-                TRelation.Model(source="Entity1", target="Entity2", desc="Relation description")
+                TRelation.Model(
+                    source="Entity1", target="Entity2", desc="Relation description",
+                    keywords=["Keyword1", "Keyword2"]
+                )
             ],
             other_relationships=[]
         )
@@ -79,8 +89,8 @@ class TestTypes(unittest.TestCase):
         entities = [TEntity(name="Entity1", type="Type1", description="Sample description 1")] * 8 + [
             TEntity(name="Entity2", type="Type2", description="Sample description 2")
         ] * 8
-        relationships = [TRelation(source="Entity1", target="Entity2", description="Relation description 12")] * 8 + [
-            TRelation(source="Entity2", target="Entity1", description="Relation description 21")
+        relationships = [TRelation(source="Entity1", target="Entity2", description="Relation description 12", keywords=["Keyword1", "Keyword2"])] * 8 + [
+            TRelation(source="Entity2", target="Entity1", description="Relation description 21", keywords=["Keyword1", "Keyword2"])
         ] * 8
         chunks = [
             TChunk(id=i, content=f"Long and repeated chunk content {i}" * 4, metadata={"key": f"value {i}"})
