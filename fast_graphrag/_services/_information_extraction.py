@@ -1,5 +1,5 @@
 """Entity-Relationship extraction module."""
-
+import os
 import asyncio
 import re
 from dataclasses import dataclass
@@ -35,8 +35,14 @@ class DefaultInformationExtractionService(BaseInformationExtractionService[TChun
         entity_types: List[str],
     ) -> List[asyncio.Future[Optional[BaseGraphStorage[TEntity, TRelation, GTId]]]]:
         """Extract both entities and relationships from the given data."""
+        concurrent_limit = os.environ.get("CONCURRENT_TASK_LIMIT")
+        semaphore = asyncio.Semaphore(int(concurrent_limit) if concurrent_limit else float('inf'))
+
+        async def limited_extract(document: Iterable[TChunk]):
+            async with semaphore:
+                return await self._extract(llm, document, prompt_kwargs, entity_types)
         return [
-            asyncio.create_task(self._extract(llm, document, prompt_kwargs, entity_types)) for document in documents
+            asyncio.create_task(limited_extract(document)) for document in documents
         ]
 
     async def extract_entities_from_query(
