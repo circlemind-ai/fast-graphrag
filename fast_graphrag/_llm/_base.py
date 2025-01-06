@@ -43,6 +43,16 @@ async def format_and_send_prompt(
     return await llm.send_message(prompt=formatted_prompt, response_model=response_model, **args)
 
 
+def format_and_write_prompt(
+    prompt_key: str,
+    format_kwargs: dict[str, Any],
+) -> str:
+    prompt = PROMPTS[prompt_key]
+
+    # Format the prompt with the supplied arguments
+    return prompt.format(**format_kwargs)
+
+
 @dataclass
 class BaseLLMService:
     """Base class for Language Model implementations."""
@@ -88,9 +98,7 @@ class BaseEmbeddingService:
 
     embedding_async_client: Any = field(init=False, default=None)
 
-    async def encode(
-        self, texts: list[str], model: Optional[str] = None
-    ) -> np.ndarray[Any, np.dtype[np.float32]]:
+    async def encode(self, texts: list[str], model: Optional[str] = None) -> np.ndarray[Any, np.dtype[np.float32]]:
         """Get the embedding representation of the input text.
 
         Args:

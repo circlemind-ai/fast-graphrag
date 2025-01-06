@@ -4,15 +4,27 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import Counter, Dict, Iterable, List, Optional, Set, Tuple, Union
 
+from ._base import (
+    BaseEdgeUpsertPolicy,
+    BaseGraphUpsertPolicy,
+    BaseNodeUpsertPolicy,
+)
 from fast_graphrag._llm._base import format_and_send_prompt
 from fast_graphrag._llm._llm_openai import BaseLLMService
 from fast_graphrag._models import TEditRelationList, TEntityDescription
 from fast_graphrag._prompt import PROMPTS
 from fast_graphrag._storage._base import BaseGraphStorage
-from fast_graphrag._types import GTEdge, GTId, GTNode, TEntity, THash, TId, TIndex, TRelation
+from fast_graphrag._types import (
+    GTEdge,
+    GTId,
+    GTNode,
+    TEntity,
+    THash,
+    TId,
+    TIndex,
+    TRelation,
+)
 from fast_graphrag._utils import logger
-
-from ._base import BaseEdgeUpsertPolicy, BaseGraphUpsertPolicy, BaseNodeUpsertPolicy
 
 
 async def summarize_entity_description(
@@ -45,7 +57,10 @@ async def summarize_entity_description(
 @dataclass
 class DefaultNodeUpsertPolicy(BaseNodeUpsertPolicy[GTNode, GTId]):
     async def __call__(
-        self, llm: BaseLLMService, target: BaseGraphStorage[GTNode, GTEdge, GTId], source_nodes: Iterable[GTNode]
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, GTEdge, GTId],
+        source_nodes: Iterable[GTNode],
     ) -> Tuple[BaseGraphStorage[GTNode, GTEdge, GTId], Iterable[Tuple[TIndex, GTNode]]]:
         upserted: Dict[TIndex, GTNode] = {}
         for node in source_nodes:
@@ -62,7 +77,10 @@ class DefaultNodeUpsertPolicy(BaseNodeUpsertPolicy[GTNode, GTId]):
 @dataclass
 class DefaultEdgeUpsertPolicy(BaseEdgeUpsertPolicy[GTEdge, GTId]):
     async def __call__(
-        self, llm: BaseLLMService, target: BaseGraphStorage[GTNode, GTEdge, GTId], source_edges: Iterable[GTEdge]
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, GTEdge, GTId],
+        source_edges: Iterable[GTEdge],
     ) -> Tuple[BaseGraphStorage[GTNode, GTEdge, GTId], Iterable[Tuple[TIndex, GTEdge]]]:
         indices = await target.insert_edges(source_edges)
 
@@ -110,7 +128,10 @@ class NodeUpsertPolicy_SummarizeDescription(BaseNodeUpsertPolicy[TEntity, TId]):
     config: Config = field(default_factory=Config)
 
     async def __call__(
-        self, llm: BaseLLMService, target: BaseGraphStorage[TEntity, GTEdge, TId], source_nodes: Iterable[TEntity]
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[TEntity, GTEdge, TId],
+        source_nodes: Iterable[TEntity],
     ) -> Tuple[BaseGraphStorage[TEntity, GTEdge, TId], Iterable[Tuple[TIndex, TEntity]]]:
         upserted: List[Tuple[TIndex, TEntity]] = []
 
@@ -171,7 +192,10 @@ class EdgeUpsertPolicy_UpsertIfValidNodes(BaseEdgeUpsertPolicy[TRelation, TId]):
     config: Config = field(default_factory=Config)
 
     async def __call__(
-        self, llm: BaseLLMService, target: BaseGraphStorage[GTNode, TRelation, TId], source_edges: Iterable[TRelation]
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, TRelation, TId],
+        source_edges: Iterable[TRelation],
     ) -> Tuple[BaseGraphStorage[GTNode, TRelation, TId], Iterable[Tuple[TIndex, TRelation]]]:
         new_edges: List[TRelation] = []
 
@@ -257,6 +281,7 @@ class EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM(BaseEdgeUpsertPolicy[TRel
         }
 
         # Extract entities and relationships
+        # TODO claude tool use
         edge_grouping, _ = await format_and_send_prompt(
             prompt_key="edges_group_similar",
             llm=llm,
@@ -310,10 +335,17 @@ class EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM(BaseEdgeUpsertPolicy[TRel
                 # upserted_eges.append((await target.upsert_edge(edge, None), edge))
 
         # Only existing edges that were marked for deletion have non-None value which corresponds to their real index.
-        return updated_edges, new_edges, [v for v in visited_edges.values() if v is not None]
+        return (
+            updated_edges,
+            new_edges,
+            [v for v in visited_edges.values() if v is not None],
+        )
 
     async def __call__(
-        self, llm: BaseLLMService, target: BaseGraphStorage[GTNode, TRelation, TId], source_edges: Iterable[TRelation]
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, TRelation, TId],
+        source_edges: Iterable[TRelation],
     ) -> Tuple[BaseGraphStorage[GTNode, TRelation, TId], Iterable[Tuple[TIndex, TRelation]]]:
         grouped_edges: Dict[Tuple[TId, TId], List[TRelation]] = defaultdict(lambda: [])
         upserted_edges: List[List[Tuple[TIndex, TRelation]]] = []

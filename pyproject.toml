@@ -7,6 +7,7 @@ packages = [{include = "fast_graphrag" }]
 readme = "README.md"
 
 [tool.poetry.dependencies]
+boto3 = "^1.35.93"
 python = "^3.10"
 igraph = "^0.11.6"
 xxhash = "^3.5.0"
@@ -17,7 +18,7 @@ tenacity = "^9.0.0"
 openai = "^1.52.1"
 scipy-stubs = "^1.14.1.5"
 hnswlib = "^0.8.0"
-instructor = "^1.6.3"
+instructor = {extras = ["anthropic"], version = "^1.7.2"}
 requests = "^2.32.3"
 python-dotenv = "^1.0.1"
 
@@ -54,3 +55,7 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "_prompt.py" = ["E501"]
+
+[tool.poetry.scripts]
+test-app = "fast_graphrag.test:start"
+analyse-code = "fast_graphrag.analyse-code:main"

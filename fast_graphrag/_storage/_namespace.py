@@ -27,7 +27,11 @@ class Workspace:
             os.makedirs(working_dir)
 
         self.checkpoints = sorted(
-            (int(x.name) for x in os.scandir(self.working_dir) if x.is_dir() and not x.name.startswith("0__err_")),
+            (
+                int(x.name)
+                for x in os.scandir(self.working_dir)
+                if x.is_dir() and not x.name.startswith("0__err_") and not x.name.startswith("batch_prompts")
+            ),
             reverse=True,
         )
         if self.checkpoints:
@@ -44,7 +48,10 @@ class Workspace:
             os.rename(old_path, new_path)
 
         if self.keep_n > 0:
-            checkpoints = sorted((x.name for x in os.scandir(self.working_dir) if x.is_dir()), reverse=True)
+            checkpoints = sorted(
+                (x.name for x in os.scandir(self.working_dir) if x.is_dir()),
+                reverse=True,
+            )
             for checkpoint in checkpoints[self.keep_n + 1 :]:
                 shutil.rmtree(os.path.join(self.working_dir, str(checkpoint)))
 
@@ -56,7 +63,6 @@ class Workspace:
         if load_path == self.working_dir and len([x for x in os.scandir(load_path) if x.is_file()]) == 0:
             return None
         return load_path
-
 
     def get_save_path(self) -> str:
         if self.save_checkpoint is None:
@@ -82,7 +88,10 @@ class Workspace:
             logger.warning("Rolling back to checkpoint: %s", self.current_load_checkpoint)
         except (StopIteration, ValueError):
             self.current_load_checkpoint = None
-            logger.warning("No checkpoints to rollback to. Last checkpoint tried: %s", self.current_load_checkpoint)
+            logger.warning(
+                "No checkpoints to rollback to. Last checkpoint tried: %s",
+                self.current_load_checkpoint,
+            )
 
         return True
 

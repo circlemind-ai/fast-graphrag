@@ -1,7 +1,19 @@
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field, fields
-from typing import Any, Callable, ClassVar, Dict, Generic, Iterable, List, Optional, Tuple, TypeAlias, TypeVar
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    TypeAlias,
+    TypeVar,
+)
 
 import numpy as np
 import numpy.typing as npt
@@ -125,8 +137,11 @@ class TEntity(BaseModelAlias, BTNode):
 
     def to_str(self) -> str:
         s = f"[{self.type}] {self.name}"
-        if len(self.description):
-            s += f"\n[DESCRIPTION] {self.description}"
+        try:
+            if self.description and len(self.description):
+                s += f"\n[DESCRIPTION] {self.description}"
+        except Exception:
+            print(f"{self} cannot call to_str")
         return s
 
     class Model(BaseModelAlias.Model, alias="Entity"):
@@ -199,11 +214,18 @@ class TRelation(BaseModelAlias, BTEdge):
         source: str = Field(..., description="Name of the source entity")
         target: str = Field(..., description="Name of the target entity")
         # alternative description "Explanation of why the source entity and the target entity are related to each other"
-        desc: str = Field(..., description="Description of the relationship between the source and target entity")
+        desc: str = Field(
+            ...,
+            description="Description of the relationship between the source and target entity",
+        )
 
         @staticmethod
         def to_dataclass(pydantic: "TRelation.Model") -> "TRelation":
-            return TRelation(source=pydantic.source, target=pydantic.target, description=pydantic.desc)
+            return TRelation(
+                source=pydantic.source,
+                target=pydantic.target,
+                description=pydantic.desc,
+            )
 
         @field_validator("source", mode="before")
         @classmethod
@@ -256,7 +278,9 @@ class TContext(Generic[GTNode, GTEdge, GTHash, GTChunk]):
         csv_tables: Dict[str, List[str]] = {
             "entities": dump_to_csv([e for e, _ in self.entities], ["name", "description"], with_header=True),
             "relations": dump_to_csv(
-                [r for r, _ in self.relations], ["source", "target", "description"], with_header=True
+                [r for r, _ in self.relations],
+                ["source", "target", "description"],
+                with_header=True,
             ),
             "chunks": dump_to_reference_list([str(c) for c, _ in self.chunks]),
         }
@@ -321,7 +345,13 @@ class TContext(Generic[GTNode, GTEdge, GTHash, GTChunk]):
                 context.append("\n## Relationships: None\n")
 
             if len(self.chunks):
-                context.extend(["\n## Sources\n", *csv_tables["chunks"][: included_up_to["chunks"]], ""])
+                context.extend(
+                    [
+                        "\n## Sources\n",
+                        *csv_tables["chunks"][: included_up_to["chunks"]],
+                        "",
+                    ]
+                )
             else:
                 context.append("\n## Sources: None\n")
         return "\n".join(context)
@@ -395,7 +425,10 @@ class TQueryResponse(Generic[GTNode, GTEdge, GTHash, GTChunk]):
         def to_dict(self):
             return {doc.index: doc.to_dict() for doc in self.documents.values() if doc.index is not None}
 
-    def format_references(self, format_fn: Callable[[int, List[int], Any], str] = lambda i, _, __: f"[{i}]"):
+    def format_references(
+        self,
+        format_fn: Callable[[int, List[int], Any], str] = lambda i, _, __: f"[{i}]",
+    ):
         # Create list of documents
         reference_list = self._ReferenceList()
         ref2data: Dict[str, Tuple[int, int]] = {}
@@ -438,6 +471,9 @@ class TQueryResponse(Generic[GTNode, GTEdge, GTHash, GTChunk]):
                 r += format_fn(doc_index, [doc.get_chunk(id)[0] for id in chunk_ids], doc.metadata)
             return r
 
-        return re.sub(r"\[\d[\s\d\]\[]*\]", _replace_fn, self.response), reference_list.to_dict()
+        return (
+            re.sub(r"\[\d[\s\d\]\[]*\]", _replace_fn, self.response),
+            reference_list.to_dict(),
+        )
 
     ####################################################################################################

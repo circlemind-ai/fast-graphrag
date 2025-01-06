@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Any, Generic, Iterable, Tuple, Type
+from typing import Any, Generic, Iterable, Tuple, Type, Optional, Union, List
+
+from pathlib import Path
 
 from scipy.sparse import csr_matrix
 
@@ -19,9 +21,60 @@ class BasePolicy:
 
 
 @dataclass
+class BatchBaseNodeUpsertPolicy(BasePolicy, Generic[GTNode, GTId]):
+    async def __call__(
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, GTEdge, GTId],
+        source_nodes: Iterable[GTNode],
+        summarize_node_output: dict,
+    ) -> Tuple[BaseGraphStorage[GTNode, GTEdge, GTId], Iterable[Tuple[TIndex, GTNode]]]:
+        raise NotImplementedError
+
+
+@dataclass
+class BatchBaseEdgeUpsertPolicy(BasePolicy, Generic[GTEdge, GTId]):
+    async def __call__(
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, GTEdge, GTId],
+        source_edges: Iterable[GTEdge],
+        summarize_edge_output: dict,
+    ) -> Tuple[BaseGraphStorage[GTNode, GTEdge, GTId], Iterable[Tuple[TIndex, GTEdge]]]:
+        raise NotImplementedError
+
+
+@dataclass
+class BatchBaseNodeUpsertPromptPolicy(BasePolicy, Generic[GTNode, GTId]):
+    async def __call__(
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, GTEdge, GTId],
+        source_nodes: Iterable[GTNode],
+        summarize_node_prompt_path: Optional[Path] = None,
+    ) -> Tuple[BaseGraphStorage[GTNode, GTEdge, GTId], Iterable[Tuple[TIndex, GTNode]]]:
+        raise NotImplementedError
+
+
+@dataclass
+class BatchBaseEdgeUpsertPromptPolicy(BasePolicy, Generic[GTNode, GTId]):
+    async def __call__(
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, GTEdge, GTId],
+        source_edges: Iterable[GTEdge],
+        summarize_edge_prompt_path: Path,
+    ) -> Tuple[BaseGraphStorage[GTNode, GTEdge, GTId], Iterable[Tuple[TIndex, GTNode]]]:
+        raise NotImplementedError
+
+
+@dataclass
 class BaseNodeUpsertPolicy(BasePolicy, Generic[GTNode, GTId]):
     async def __call__(
-        self, llm: BaseLLMService, target: BaseGraphStorage[GTNode, GTEdge, GTId], source_nodes: Iterable[GTNode]
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, GTEdge, GTId],
+        source_nodes: Iterable[GTNode],
     ) -> Tuple[BaseGraphStorage[GTNode, GTEdge, GTId], Iterable[Tuple[TIndex, GTNode]]]:
         raise NotImplementedError
 
@@ -29,7 +82,10 @@ class BaseNodeUpsertPolicy(BasePolicy, Generic[GTNode, GTId]):
 @dataclass
 class BaseEdgeUpsertPolicy(BasePolicy, Generic[GTEdge, GTId]):
     async def __call__(
-        self, llm: BaseLLMService, target: BaseGraphStorage[GTNode, GTEdge, GTId], source_edges: Iterable[GTEdge]
+        self,
+        llm: BaseLLMService,
+        target: BaseGraphStorage[GTNode, GTEdge, GTId],
+        source_edges: Iterable[GTEdge],
     ) -> Tuple[BaseGraphStorage[GTNode, GTEdge, GTId], Iterable[Tuple[TIndex, GTEdge]]]:
         raise NotImplementedError
 
