@@ -4,24 +4,35 @@ __all__ = ["GraphRAG", "QueryParam"]
 
 from dataclasses import dataclass, field
 from typing import Type
+import logging
 
 from fast_graphrag._llm import DefaultEmbeddingService, DefaultLLMService
 from fast_graphrag._llm._base import BaseEmbeddingService
 from fast_graphrag._llm._llm_openai import BaseLLMService
 from fast_graphrag._policies._base import BaseGraphUpsertPolicy
+from fast_graphrag._policies._batch_graph_upsert import (
+    EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM_BatchAsync,
+    EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM_PreparePrompts,
+    NodeUpsertPolicy_SummarizeDescription_BatchAsync,
+    NodeUpsertPolicy_SummarizeDescription_PreparePrompts,
+)
 from fast_graphrag._policies._graph_upsert import (
     DefaultGraphUpsertPolicy,
     EdgeUpsertPolicy_UpsertIfValidNodes,
     EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM,
     NodeUpsertPolicy_SummarizeDescription,
 )
-from fast_graphrag._policies._ranking import RankingPolicy_TopK, RankingPolicy_WithThreshold
+from fast_graphrag._policies._ranking import (
+    RankingPolicy_TopK,
+    RankingPolicy_WithThreshold,
+)
 from fast_graphrag._services import (
     BaseChunkingService,
     BaseInformationExtractionService,
     BaseStateManagerService,
     DefaultChunkingService,
     DefaultInformationExtractionService,
+    BatchInformationExtractionService,
     DefaultStateManagerService,
 )
 from fast_graphrag._storage import (
@@ -32,7 +43,15 @@ from fast_graphrag._storage import (
     DefaultVectorStorageConfig,
 )
 from fast_graphrag._storage._namespace import Workspace
-from fast_graphrag._types import TChunk, TEmbedding, TEntity, THash, TId, TIndex, TRelation
+from fast_graphrag._types import (
+    TChunk,
+    TEmbedding,
+    TEntity,
+    THash,
+    TId,
+    TIndex,
+    TRelation,
+)
 
 from ._graphrag import BaseGraphRAG, QueryParam
 
@@ -49,6 +68,9 @@ class GraphRAG(BaseGraphRAG[TEmbedding, THash, TChunk, TEntity, TRelation, TId])
         information_extraction_service_cls: Type[BaseInformationExtractionService[TChunk, TEntity, TRelation, TId]] = (
             field(default=DefaultInformationExtractionService)
         )
+        batch_information_extraction_service_cls: Type[
+            BaseInformationExtractionService[TChunk, TEntity, TRelation, TId]
+        ] = field(default=BatchInformationExtractionService)
         information_extraction_upsert_policy: BaseGraphUpsertPolicy[TEntity, TRelation, TId] = field(
             default_factory=lambda: DefaultGraphUpsertPolicy(
                 config=NodeUpsertPolicy_SummarizeDescription.Config(),
@@ -67,9 +89,7 @@ class GraphRAG(BaseGraphRAG[TEmbedding, THash, TChunk, TEntity, TRelation, TId])
             default_factory=lambda: DefaultGraphStorage(DefaultGraphStorageConfig(node_cls=TEntity, edge_cls=TRelation))
         )
         entity_storage: DefaultVectorStorage[TIndex, TEmbedding] = field(
-            default_factory=lambda: DefaultVectorStorage(
-                DefaultVectorStorageConfig()
-            )
+            default_factory=lambda: DefaultVectorStorage(DefaultVectorStorageConfig())
         )
         chunk_storage: DefaultIndexedKeyValueStorage[THash, TChunk] = field(
             default_factory=lambda: DefaultIndexedKeyValueStorage(None)
@@ -87,8 +107,20 @@ class GraphRAG(BaseGraphRAG[TEmbedding, THash, TChunk, TEntity, TRelation, TId])
         node_upsert_policy: NodeUpsertPolicy_SummarizeDescription = field(
             default_factory=lambda: NodeUpsertPolicy_SummarizeDescription()
         )
+        batch_node_upsert_policy: NodeUpsertPolicy_SummarizeDescription_BatchAsync = field(
+            default_factory=lambda: NodeUpsertPolicy_SummarizeDescription_BatchAsync()
+        )
+        batch_node_upsert_prompt_policy: NodeUpsertPolicy_SummarizeDescription_PreparePrompts() = field(
+            default_factory=lambda: NodeUpsertPolicy_SummarizeDescription_PreparePrompts()
+        )
         edge_upsert_policy: EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM = field(
             default_factory=lambda: EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM()
+        )
+        batch_edge_upsert_policy: EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM_BatchAsync = field(
+            default_factory=lambda: EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM_BatchAsync()
+        )
+        batch_edge_upsert_prompt_policy: EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM_PreparePrompts = field(
+            default_factory=lambda: EdgeUpsertPolicy_UpsertValidAndMergeSimilarByLLM_PreparePrompts()
         )
 
         def __post_init__(self):
@@ -105,6 +137,9 @@ class GraphRAG(BaseGraphRAG[TEmbedding, THash, TChunk, TEntity, TRelation, TId])
         self.information_extraction_service = self.config.information_extraction_service_cls(
             graph_upsert=self.config.information_extraction_upsert_policy
         )
+        self.batch_information_extraction_service = self.config.batch_information_extraction_service_cls(
+            graph_upsert=self.config.information_extraction_upsert_policy
+        )
         self.state_manager = self.config.state_manager_cls(
             workspace=Workspace.new(self.working_dir, keep_n=self.n_checkpoints),
             embedding_service=self.embedding_service,
@@ -114,5 +149,10 @@ class GraphRAG(BaseGraphRAG[TEmbedding, THash, TChunk, TEntity, TRelation, TId])
             entity_ranking_policy=self.config.entity_ranking_policy,
             chunk_ranking_policy=self.config.chunk_ranking_policy,
             node_upsert_policy=self.config.node_upsert_policy,
+            batch_node_upsert_policy=self.config.batch_node_upsert_policy,
+            batch_node_upsert_prompt_policy=self.config.batch_node_upsert_prompt_policy,
             edge_upsert_policy=self.config.edge_upsert_policy,
+            batch_edge_upsert_policy=self.config.batch_edge_upsert_policy,
+            batch_edge_upsert_prompt_policy=self.config.batch_edge_upsert_prompt_policy,
         )
+        logging.basicConfig(filename="graphrag2.log", level=logging.DEBUG)

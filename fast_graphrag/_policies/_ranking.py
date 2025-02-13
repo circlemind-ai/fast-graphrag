@@ -18,7 +18,7 @@ class RankingPolicy_WithThreshold(BaseRankingPolicy):  # noqa: N801
         # Remove scores below threshold
         scores.data[scores.data < self.config.threshold] = 0
         if scores.nnz >= self.config.max_entities:
-            smallest_indices = np.argpartition(scores.data, -self.config.max_entities)[:-self.config.max_entities]
+            smallest_indices = np.argpartition(scores.data, -self.config.max_entities)[: -self.config.max_entities]
             scores.data[smallest_indices] = 0
         scores.eliminate_zeros()
 
@@ -37,7 +37,7 @@ class RankingPolicy_TopK(BaseRankingPolicy):  # noqa: N801
         if scores.nnz <= self.config.top_k:
             return scores
 
-        smallest_indices = np.argpartition(scores.data, -self.config.top_k)[:-self.config.top_k]
+        smallest_indices = np.argpartition(scores.data, -self.config.top_k)[: -self.config.top_k]
         scores.data[smallest_indices] = 0
         scores.eliminate_zeros()
 

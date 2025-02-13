@@ -8,6 +8,7 @@ import numpy as np
 import numpy.typing as npt
 from scipy.sparse import csr_matrix
 
+import asyncio
 from fast_graphrag._types import TIndex
 
 logger = logging.getLogger("graphrag")
@@ -28,27 +29,25 @@ def timeit(func: Callable[..., Any]):
 
 
 def throttle_async_func_call(
-    max_concurrent: int = 2048, stagger_time: Optional[float] = None, waiting_time: float = 0.001
+    max_concurrent: int = 2048,
+    stagger_time: Optional[float] = None,
+    waiting_time: float = 0.001,
 ):
     _wrappedFn = TypeVar("_wrappedFn", bound=Callable[..., Any])
 
     def decorator(func: _wrappedFn) -> _wrappedFn:
-        __current_exes = 0
-        __current_queued = 0
+        semaphore = asyncio.Semaphore(max_concurrent)
 
         @wraps(func)
         async def wait_func(*args: Any, **kwargs: Any) -> Any:
-            nonlocal __current_exes, __current_queued
-            while __current_exes >= max_concurrent:
-                await asyncio.sleep(waiting_time)
-
-            # __current_queued += 1
-            # await asyncio.sleep(stagger_time * (__current_queued - 1))
-            # __current_queued -= 1
-            __current_exes += 1
-            result = await func(*args, **kwargs)
-            __current_exes -= 1
-            return result
+            async with semaphore:
+                try:
+                    if stagger_time:
+                        await asyncio.sleep(stagger_time)
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    logger.error(f"Error in throttled function {func.__name__}: {e}")
+                    raise e
 
         return wait_func  # type: ignore
 
@@ -66,7 +65,9 @@ def get_event_loop() -> asyncio.AbstractEventLoop:
     return loop
 
 
-def extract_sorted_scores(row_vector: csr_matrix) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.float32]]:
+def extract_sorted_scores(
+    row_vector: csr_matrix,
+) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.float32]]:
     """Take a sparse row vector and return a list of non-zero (index, score) pairs sorted by score."""
     assert row_vector.shape[0] <= 1, "The input matrix must be a row vector."
     if row_vector.shape[0] == 0:

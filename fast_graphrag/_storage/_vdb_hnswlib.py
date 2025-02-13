@@ -37,7 +37,7 @@ class HNSWVectorStorage(BaseVectorStorage[GTId, GTEmbedding]):
 
     @property
     def max_size(self) -> int:
-        return self._index.get_max_elements()
+        return self._index.get_max_elements() or self.INITIAL_MAX_ELEMENTS
 
     async def upsert(
         self,
@@ -49,9 +49,9 @@ class HNSWVectorStorage(BaseVectorStorage[GTId, GTEmbedding]):
         embeddings = np.array(list(embeddings), dtype=np.float32)
         metadata = list(metadata) if metadata else None
 
-        assert (len(ids) == len(embeddings)) and (
-            metadata is None or (len(metadata) == len(ids))
-        ), "ids, embeddings, and metadata (if provided) must have the same length"
+        assert (len(ids) == len(embeddings)) and (metadata is None or (len(metadata) == len(ids))), (
+            "ids, embeddings, and metadata (if provided) must have the same length"
+        )
 
         if self.size + len(embeddings) >= self.max_size:
             new_size = self.max_size * 2
@@ -83,7 +83,10 @@ class HNSWVectorStorage(BaseVectorStorage[GTId, GTEmbedding]):
         return ids, 1.0 - np.array(distances, dtype=TScore) * 0.5
 
     async def score_all(
-        self, embeddings: Iterable[GTEmbedding], top_k: int = 1, threshold: Optional[float] = None
+        self,
+        embeddings: Iterable[GTEmbedding],
+        top_k: int = 1,
+        threshold: Optional[float] = None,
     ) -> csr_matrix:
         if not isinstance(embeddings, np.ndarray):
             embeddings = np.array(list(embeddings), dtype=np.float32)
@@ -128,9 +131,7 @@ class HNSWVectorStorage(BaseVectorStorage[GTId, GTEmbedding]):
                     self._index.load_index(index_file_name, allow_replace_deleted=True)
                     with open(metadata_file_name, "rb") as f:
                         self._metadata = pickle.load(f)
-                        logger.debug(
-                            f"Loaded {self.size} elements from vectordb storage '{index_file_name}'."
-                        )
+                        logger.debug(f"Loaded {self.size} elements from vectordb storage '{index_file_name}'.")
                     return  # All good
                 except Exception as e:
                     t = f"Error loading metadata file for vectordb storage '{metadata_file_name}': {e}"
@@ -144,7 +145,7 @@ class HNSWVectorStorage(BaseVectorStorage[GTId, GTEmbedding]):
             max_elements=self.INITIAL_MAX_ELEMENTS,
             ef_construction=self.config.ef_construction,
             M=self.config.M,
-            allow_replace_deleted=True
+            allow_replace_deleted=True,
         )
         self._index.set_ef(self.config.ef_search)
         self._metadata = {}
@@ -177,7 +178,7 @@ class HNSWVectorStorage(BaseVectorStorage[GTId, GTEmbedding]):
                     self._metadata = pickle.load(f)
                 logger.debug(f"Loaded {self.size} elements from vectordb storage '{index_file_name}'.")
 
-                return # All good
+                return  # All good
             except Exception as e:
                 t = f"Error loading vectordb storage from {index_file_name}: {e}"
                 logger.error(t)
@@ -188,7 +189,7 @@ class HNSWVectorStorage(BaseVectorStorage[GTId, GTEmbedding]):
             max_elements=self.INITIAL_MAX_ELEMENTS,
             ef_construction=self.config.ef_construction,
             M=self.config.M,
-            allow_replace_deleted=True
+            allow_replace_deleted=True,
         )
         self._index.set_ef(self.config.ef_search)
         self._metadata = {}

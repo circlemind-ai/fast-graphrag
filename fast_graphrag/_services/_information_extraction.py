@@ -1,4 +1,5 @@
 """Entity-Relationship extraction module."""
+
 import asyncio
 import re
 from dataclasses import dataclass
@@ -35,7 +36,10 @@ class DefaultInformationExtractionService(BaseInformationExtractionService[TChun
     ) -> List[asyncio.Future[Optional[BaseGraphStorage[TEntity, TRelation, GTId]]]]:
         """Extract both entities and relationships from the given data."""
         return [
-            asyncio.create_task(self._extract(llm, document, prompt_kwargs, entity_types)) for document in documents
+            asyncio.create_task(
+                self._extract(llm, document, prompt_kwargs, entity_types),
+            )
+            for document in documents
         ]
 
     async def extract_entities_from_query(
@@ -50,28 +54,28 @@ class DefaultInformationExtractionService(BaseInformationExtractionService[TChun
             response_model=TQueryEntities,
         )
 
-        return {
-            "named": entities.named,
-            "generic": entities.generic
-        }
+        return {"named": entities.named, "generic": entities.generic}
 
     async def _extract(
-        self, llm: BaseLLMService, chunks: Iterable[TChunk], prompt_kwargs: Dict[str, str], entity_types: List[str]
+        self,
+        llm: BaseLLMService,
+        chunks: Iterable[TChunk],
+        prompt_kwargs: Dict[str, str],
+        entity_types: List[str],
     ) -> Optional[BaseGraphStorage[TEntity, TRelation, GTId]]:
         """Extract both entities and relationships from the given chunks."""
-        # Extract entities and relatioships from each chunk
-        try:
-            chunk_graphs = await asyncio.gather(
-                *[self._extract_from_chunk(llm, chunk, prompt_kwargs, entity_types) for chunk in chunks]
-            )
-            if len(chunk_graphs) == 0:
-                return None
+        print(f"_extract chunk count {len(chunks)}")
+        chunk_graphs = await asyncio.gather(
+            *[self._extract_from_chunk(llm, chunk, prompt_kwargs, entity_types) for chunk in chunks],
+            return_exceptions=True,
+        )
 
-            # Combine chunk graphs in document graph
-            return await self._merge(llm, chunk_graphs)
-        except Exception as e:
-            logger.error(f"Error during information extraction from document: {e}")
-            return None
+        for result in chunk_graphs:
+            if isinstance(result, Exception):
+                logger.error(f"Error during extract_from_chunk: {result}")
+                raise result
+
+        return await self._merge(llm, chunk_graphs)
 
     async def _gleaning(
         self, llm: BaseLLMService, initial_graph: TGraph, history: list[dict[str, str]]
@@ -80,49 +84,50 @@ class DefaultInformationExtractionService(BaseInformationExtractionService[TChun
         # Prompts
         current_graph = initial_graph
 
-        try:
-            for gleaning_count in range(self.max_gleaning_steps):
-                # Do gleaning step
-                gleaning_result, history = await format_and_send_prompt(
-                    prompt_key="entity_relationship_continue_extraction",
-                    llm=llm,
-                    format_kwargs={},
-                    response_model=TGraph,
-                    history_messages=history,
-                )
+        for gleaning_count in range(self.max_gleaning_steps):
+            # Do gleaning step
+            gleaning_result, history = await format_and_send_prompt(
+                prompt_key="entity_relationship_continue_extraction",
+                llm=llm,
+                format_kwargs={},
+                response_model=TGraph,
+                history_messages=history,
+            )
 
-                # Combine new entities, relationships with previously obtained ones
-                current_graph.entities.extend(gleaning_result.entities)
-                current_graph.relationships.extend(gleaning_result.relationships)
+            # Combine new entities, relationships with previously obtained ones
+            current_graph.entities.extend(gleaning_result.entities)
+            current_graph.relationships.extend(gleaning_result.relationships)
 
-                # Stop gleaning if we don't need to keep going
-                if gleaning_count == self.max_gleaning_steps - 1:
-                    break
+            # Stop gleaning if we don't need to keep going
+            if gleaning_count == self.max_gleaning_steps - 1:
+                break
 
-                # Ask llm if we are done extracting entities and relationships
-                gleaning_status, _ = await format_and_send_prompt(
-                    prompt_key="entity_relationship_gleaning_done_extraction",
-                    llm=llm,
-                    format_kwargs={},
-                    response_model=TGleaningStatus,
-                    history_messages=history,
-                )
+            # Ask llm if we are done extracting entities and relationships
+            gleaning_status, _ = await format_and_send_prompt(
+                prompt_key="entity_relationship_gleaning_done_extraction",
+                llm=llm,
+                format_kwargs={},
+                response_model=TGleaningStatus,
+                history_messages=history,
+            )
 
-                # If we are done parsing, stop gleaning
-                if gleaning_status.status == Literal["done"]:
-                    break
-        except Exception as e:
-            logger.error(f"Error during gleaning: {e}")
-
-            return None
+            # If we are done parsing, stop gleaning
+            if gleaning_status.status == Literal["done"]:
+                break
 
         return current_graph
 
     async def _extract_from_chunk(
-        self, llm: BaseLLMService, chunk: TChunk, prompt_kwargs: Dict[str, str], entity_types: List[str]
+        self,
+        llm: BaseLLMService,
+        chunk: TChunk,
+        prompt_kwargs: Dict[str, str],
+        entity_types: List[str],
     ) -> TGraph:
         """Extract entities and relationships from the given chunk."""
         prompt_kwargs["input_text"] = chunk.content
+
+        print(f"Starting extraction from chunk {chunk.id}")
 
         chunk_graph, history = await format_and_send_prompt(
             prompt_key="entity_relationship_extraction",
@@ -153,11 +158,9 @@ class DefaultInformationExtractionService(BaseInformationExtractionService[TChun
 
         await graph_storage.insert_start()
 
-        try:
-            # This is synchronous since each sub graph is inserted into the graph storage and conflicts are resolved
-            for graph in graphs:
-                await self.graph_upsert(llm, graph_storage, graph.entities, graph.relationships)
-        finally:
-            await graph_storage.insert_done()
+        # This is synchronous since each sub graph is inserted into the graph storage and conflicts are resolved
+        for graph in graphs:
+            await self.graph_upsert(llm, graph_storage, graph.entities, graph.relationships)
+        await graph_storage.insert_done()
 
         return graph_storage

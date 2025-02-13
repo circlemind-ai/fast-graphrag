@@ -1,7 +1,20 @@
 import asyncio
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import Any, Awaitable, Dict, Iterable, List, Optional, Tuple, Type, cast
+import pickle
+from typing import (
+    Any,
+    Awaitable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    cast,
+    Union,
+)
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
@@ -73,6 +86,139 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
 
         return new_chunks
 
+    async def batch_prepare_node_summaries(
+        self,
+        graphs,
+        summarize_node_prompt_path: Path,
+    ):
+        nodes, edges = zip(*graphs)
+        await self.batch_node_upsert_prompt_policy(
+            self.graph_storage,
+            chain(*nodes),
+            summarize_node_prompt_path,
+        )
+
+    async def batch_prepare_edge_summaries(
+        self,
+        graphs,
+        summarize_edge_prompt_path: Path,
+    ):
+        nodes, edges = zip(*graphs)
+        await self.batch_edge_upsert_prompt_policy(
+            self.graph_storage,
+            chain(*edges),
+            summarize_edge_prompt_path,
+        )
+
+    async def batch_upsert_nodes(
+        self,
+        llm: BaseLLMService,
+        graphs,
+        summarize_node_output: dict,
+        show_progress: bool = True,
+    ):
+        nodes: Iterable[List[TEntity]]
+        edges: Iterable[List[TRelation]]
+
+        nodes, edges = zip(*graphs)
+
+        _, upserted_nodes = await self.batch_node_upsert_policy(
+            llm,
+            self.graph_storage,
+            chain(*nodes),
+            summarize_node_output,
+        )
+        return upserted_nodes
+
+    async def batch_upsert(
+        self,
+        llm: BaseLLMService,
+        graphs,
+        documents: Iterable[Iterable[TChunk]],
+        upserted_nodes,
+        summarize_edge_output: dict,
+        show_progress: bool = True,
+    ) -> Union[bool, None]:
+        nodes: Iterable[List[TEntity]]
+        edges: Iterable[List[TRelation]]
+
+        progress_bar = tqdm(total=5, disable=not show_progress, desc="Building...")
+        nodes, edges = zip(*graphs)
+
+        progress_bar.set_description("Building... [upserting edges]")
+
+        _, _ = await self.batch_edge_upsert_policy(
+            llm,
+            self.graph_storage,
+            chain(*edges),
+            summarize_edge_output,
+        )
+        progress_bar.update(1)
+
+        # STEP (2): Computing entity embeddings
+        progress_bar.set_description("Building... [computing embeddings]")
+        # Insert entities in entity_storage
+        # TODO make sure TEntity never has none values
+        # TODO make this bit batch async too
+        embeddings = await self.embedding_service.encode(texts=[d.to_str() for _, d in upserted_nodes if d is not None])
+        progress_bar.update(1)
+        await self.entity_storage.upsert(ids=(i for i, _ in upserted_nodes), embeddings=embeddings)
+        progress_bar.update(1)
+
+        # STEP: Entity deduplication
+        # Note that get_knn will very likely return the same entity as the most similar one, so we remove it
+        # when selecting the index order.
+        progress_bar.set_description("Building... [entity deduplication]")
+        upserted_indices = np.array([i for i, _ in upserted_nodes]).reshape(-1, 1)
+        similar_indices, scores = await self.entity_storage.get_knn(embeddings, top_k=3)
+        similar_indices = np.array(similar_indices)
+        scores = np.array(scores)
+
+        # Create matrix with the indices with a score higher than the threshold
+        # We use the fact that similarity scores are symmetric between entity pairs,
+        # so we only select half of that by index order
+        similar_indices[
+            (scores < self.insert_similarity_score_threshold)
+            | (similar_indices <= upserted_indices)  # remove indices smaller or equal the entity
+        ] = 0  # 0 can be used here (not 100% sure, but 99% sure)
+        progress_bar.update(1)
+
+        # | entity_index  | similar_indices[] |
+        # |---------------|------------------------|
+        # | 1             | 0, 7, 12, 0, 9         |
+
+        # STEP: insert identity edges
+        progress_bar.set_description("Building... [identity edges]")
+
+        async def _insert_identiy_edges(
+            source_index: TIndex, target_indices: npt.NDArray[np.int32]
+        ) -> Iterable[Tuple[TIndex, TIndex]]:
+            return [
+                (source_index, idx)
+                for idx in target_indices
+                if idx != 0 and not await self.graph_storage.are_neighbours(source_index, idx)
+            ]
+
+        new_edge_indices = list(
+            chain(
+                *await asyncio.gather(*[_insert_identiy_edges(i, indices) for i, indices in enumerate(similar_indices)])
+            )
+        )
+        new_edges_attrs: Dict[str, Any] = {
+            "description": ["is"] * len(new_edge_indices),
+            "chunks": [[]] * len(new_edge_indices),
+        }
+        await self.graph_storage.insert_edges(indices=new_edge_indices, attrs=new_edges_attrs)
+        progress_bar.update(1)
+
+        # STEP: Save chunks
+        # Insert chunks in chunk_storage
+        progress_bar.set_description("Building... [saving chunks]")
+        flattened_chunks = [chunk for chunks in documents for chunk in chunks]
+        await self.chunk_storage.upsert(keys=[chunk.id for chunk in flattened_chunks], values=flattened_chunks)
+        progress_bar.update(1)
+        progress_bar.set_description("Building [done]")
+
     async def upsert(
         self,
         llm: BaseLLMService,
@@ -83,39 +229,56 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
         nodes: Iterable[List[TEntity]]
         edges: Iterable[List[TRelation]]
 
+        tasks = []
+        failed_tasks = 0
+        processed_tasks = 0
+
         # STEP: Extracting subgraphs
         async def _get_graphs(
-            fgraph: asyncio.Future[Optional[BaseGraphStorage[TEntity, TRelation, TId]]],
+            graph: Optional[BaseGraphStorage[TEntity, TRelation, TId]],
         ) -> Optional[Tuple[List[TEntity], List[TRelation]]]:
-            graph = await fgraph
             if graph is None:
                 return None
 
-            nodes = [t for i in range(await graph.node_count()) if (t := await graph.get_node_by_index(i)) is not None]
-            edges = [t for i in range(await graph.edge_count()) if (t := await graph.get_edge_by_index(i)) is not None]
-
+            nodes = []
+            edges = []
+            for i in range(await graph.node_count()):
+                if (t := await graph.get_node_by_index(i)) is not None:
+                    nodes.append(t)
+            for i in range(await graph.edge_count()):
+                if (t := await graph.get_edge_by_index(i)) is not None:
+                    edges.append(t)
             return (nodes, edges)
 
-        graphs = [
-            r
-            for graph in tqdm(
-                asyncio.as_completed([_get_graphs(fgraph) for fgraph in subgraphs]),
-                total=len(subgraphs),
-                desc="Extracting data",
-                disable=not show_progress,
-            )
-            if (r := await graph) is not None
-        ]
+        # Convert subgraphs to tasks with timeout
+        tasks = [asyncio.create_task(_get_graphs(fgraph)) for fgraph in subgraphs]
+        # Process completed tasks as they finish
+        graphs = []
+        for task in asyncio.as_completed(tasks, timeout=300):
+            result = await task
+            processed_tasks += 1
+            if result is not None:
+                graphs.append(result)
+            else:
+                failed_tasks += 1
 
         if len(graphs) == 0:
+            logger.warning("No valid graphs were processed")
             return
+
+        if failed_tasks > 0:
+            logger.warning(f"Failed to process {failed_tasks} out of {processed_tasks} files")
 
         progress_bar = tqdm(total=7, disable=not show_progress, desc="Building...")
         # STEP (2): Upserting nodes and edges
         nodes, edges = zip(*graphs)
         progress_bar.set_description("Building... [upserting graphs]")
 
-        _, upserted_nodes = await self.node_upsert_policy(llm, self.graph_storage, chain(*nodes))
+        _, upserted_nodes = await self.node_upsert_policy(
+            llm,
+            self.graph_storage,
+            chain(*nodes),
+        )
         progress_bar.update(1)
         _, _ = await self.edge_upsert_policy(llm, self.graph_storage, chain(*edges))
         progress_bar.update(1)
@@ -203,7 +366,9 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
                 entity_scores.append(vdb_entity_scores_by_named_entity)
 
             vdb_entity_scores_by_generic_entity_and_query = await self._score_entities_by_vectordb(
-                query_embeddings=query_embeddings[len(entities["named"]) :], top_k=20, threshold=0.5
+                query_embeddings=query_embeddings[len(entities["named"]) :],
+                top_k=20,
+                threshold=0.5,
             )
             entity_scores.append(vdb_entity_scores_by_generic_entity_and_query)
 
@@ -255,7 +420,11 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
                 if chunk is not None:
                     relevant_chunks.append((chunk, s))
 
-            return TContext(entities=relevant_entities, relations=relevant_relationships, chunks=relevant_chunks)
+            return TContext(
+                entities=relevant_entities,
+                relations=relevant_relationships,
+                chunks=relevant_chunks,
+            )
         except Exception as e:
             logger.error(f"Error during scoring of chunks and relationships.\n{e}")
             raise e
@@ -264,7 +433,10 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
         raise NotImplementedError
 
     async def _score_entities_by_vectordb(
-        self, query_embeddings: Iterable[TEmbedding], top_k: int = 1, threshold: Optional[float] = None
+        self,
+        query_embeddings: Iterable[TEmbedding],
+        top_k: int = 1,
+        threshold: Optional[float] = None,
     ) -> csr_matrix:
         # TODO: check this
         # if top_k != 1:
@@ -380,7 +552,11 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
         ]
         await self._relationships_to_chunks.set(
             csr_from_indices_list(
-                raw_relationships_to_chunks, shape=(len(raw_relationships_to_chunks), await self.chunk_storage.size())
+                raw_relationships_to_chunks,
+                shape=(
+                    len(raw_relationships_to_chunks),
+                    await self.chunk_storage.size(),
+                ),
             )
         )
 
@@ -396,6 +572,20 @@ class DefaultStateManagerService(BaseStateManagerService[TEntity, TRelation, THa
             tasks.append(storage_inst.insert_done())
         await asyncio.gather(*tasks)
 
+        for storage_inst in storages:
+            storage_inst.set_in_progress(False)
+
+    async def insert_abort(self):
+        """Abort the current insertion and clean up state without marking anything as complete"""
+        storages: List[BaseStorage] = [
+            self.graph_storage,
+            self.entity_storage,
+            self.chunk_storage,
+            self._relationships_to_chunks,
+            self._entities_to_relationships,
+        ]
+
+        # Just reset the in_progress flags without committing any changes
         for storage_inst in storages:
             storage_inst.set_in_progress(False)
 

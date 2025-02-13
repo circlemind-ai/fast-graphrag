@@ -17,13 +17,23 @@ from fast_graphrag._types import GTBlob, GTEdge, GTEmbedding, GTId, GTKey, GTNod
 # Storage
 class DefaultVectorStorage(HNSWVectorStorage[GTId, GTEmbedding]):
     pass
+
+
 class DefaultVectorStorageConfig(HNSWVectorStorageConfig):
     pass
+
+
 class DefaultBlobStorage(PickleBlobStorage[GTBlob]):
     pass
+
+
 class DefaultIndexedKeyValueStorage(PickleIndexedKeyValueStorage[GTKey, GTValue]):
     pass
+
+
 class DefaultGraphStorage(IGraphStorage[GTNode, GTEdge, GTId]):
     pass
+
+
 class DefaultGraphStorageConfig(IGraphStorageConfig[GTNode, GTEdge]):
     pass

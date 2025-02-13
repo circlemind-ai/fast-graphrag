@@ -1,5 +1,5 @@
 from itertools import chain
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic._internal import _model_construction
@@ -17,7 +17,12 @@ def _json_schema_slim(schema: dict[str, Any]) -> None:
 
 class _BaseModelAliasMeta(_model_construction.ModelMetaclass):
     def __new__(
-        cls, name: str, bases: tuple[type[Any], ...], dct: Dict[str, Any], alias: Optional[str] = None, **kwargs: Any
+        cls,
+        name: str,
+        bases: tuple[type[Any], ...],
+        dct: Dict[str, Any],
+        alias: Optional[str] = None,
+        **kwargs: Any,
     ) -> type:
         if alias:
             dct["__qualname__"] = alias
@@ -80,7 +85,8 @@ class TAnswer(BaseModel):
 class TEditRelation(BaseModel):
     ids: List[int] = Field(..., description="Ids of the facts that you are combining into one")
     description: str = Field(
-        ..., description="Summarized description of the combined facts, in detail and comprehensive"
+        ...,
+        description="Summarized description of the combined facts, in detail and comprehensive",
     )
 
 
@@ -115,3 +121,47 @@ class TQueryEntities(BaseModel):
     # @classmethod
     # def uppercase_generic(cls, value: List[str]):
     #     return [e.upper() for e in value] if value else value
+
+
+class TClaudeContentBlock(BaseModel):
+    text: str
+    type: str
+
+
+class TClaudeToolUseBlock(BaseModel):
+    type: str
+    id: str
+    name: str
+    input: dict
+
+
+class TClaudeMessage(BaseModel):
+    role: str
+    content: List[Union[TClaudeContentBlock, TClaudeToolUseBlock]]
+
+
+class TBedrockBatchInput(BaseModel):
+    anthropic_version: str
+    max_tokens: int
+    messages: List[TClaudeMessage]
+    tools: Union[None, List]
+    tool_choice: Union[None, dict]
+
+
+class TBedrockBatchOutput(BaseModel):
+    id: str
+    type: str
+    role: str
+    model: str
+    content: List[Union[TClaudeContentBlock, TClaudeToolUseBlock]]
+
+
+class TBedrockBatchRequest(BaseModel):
+    recordId: str
+    modelInput: TBedrockBatchInput
+
+
+class TBedrockBatchResponse(BaseModel):
+    recordId: str
+    modelInput: TBedrockBatchInput
+    modelOutput: TBedrockBatchOutput

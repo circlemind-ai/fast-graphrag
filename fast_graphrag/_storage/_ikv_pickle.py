@@ -80,11 +80,12 @@ class PickleIndexedKeyValueStorage(BaseIndexedKeyValueStorage[GTKey, GTValue]):
 
             if data_file_name:
                 try:
+                    print(f"About to save pickle file to {data_file_name}")  # Add this
                     with open(data_file_name, "rb") as f:
                         self._data, self._free_indices, self._key_to_index = pickle.load(f)
-                        logger.debug(
-                            f"Loaded {len(self._data)} elements from indexed key-value storage '{data_file_name}'."
-                        )
+                        print(f"Loaded {len(self._data)} elements from indexed key-value storage '{data_file_name}'.")
+                    print(f"Successfully saved pickle file to {data_file_name}")  # Add this
+                    print(f"Saving {len(self._data)} elements to indexed key-value storage '{data_file_name}'.")
                 except Exception as e:
                     t = f"Error loading data file for key-vector storage '{data_file_name}': {e}"
                     logger.error(t)

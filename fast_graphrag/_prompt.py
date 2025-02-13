@@ -62,11 +62,17 @@ Document: {input_text}
 Output:
 """
 
-PROMPTS["entity_relationship_continue_extraction"] = "MANY entities were missed in the last extraction.  Add them below using the same format:"
+PROMPTS["entity_relationship_continue_extraction"] = (
+    "MANY entities were missed in the last extraction.  Add them below using the same format:"
+)
 
-PROMPTS["entity_relationship_gleaning_done_extraction"] = "Retrospectively check if all entities have been correctly identified: answer done if so, or continue if there are still entities that need to be added."
+PROMPTS["entity_relationship_gleaning_done_extraction"] = (
+    "Retrospectively check if all entities have been correctly identified: answer done if so, or continue if there are still entities that need to be added."
+)
 
-PROMPTS["entity_extraction_query"] = """Given the query below, your task is to extract all entities relevant to perform information retrieval to produce an answer.
+PROMPTS[
+    "entity_extraction_query"
+] = """Given the query below, your task is to extract all entities relevant to perform information retrieval to produce an answer.
 
 -EXAMPLE 1-
 Query: Who directed the film that was shot in or around Leland, North Carolina in 1986?
@@ -83,7 +89,7 @@ Output:
 
 
 PROMPTS[
-	"summarize_entity_descriptions"
+    "summarize_entity_descriptions"
 ] = """You are a helpful assistant responsible for generating a summary of the data provided below.
 Given the current description, summarize it by removing redundant and generic information. Resolve any contradictions and provide a single, coherent summary.
 Write in third person and explicitly include the entity names to preserve the full context.
@@ -96,7 +102,7 @@ Updated:
 
 
 PROMPTS[
-	"edges_group_similar"
+    "edges_group_similar"
 ] = """You are a helpful assistant responsible for maintaining a list of facts describing the relations between two entities so that information is not redundant.
 Given a list of ids and facts, identify any facts that should be grouped together as they contain similar or duplicated information and provide a new summarized description for the group.
 
@@ -129,7 +135,9 @@ Facts:
 Ouput:
 """
 
-PROMPTS["generate_response_query_with_references"] = """You are a helpful assistant analyzing the given input data to provide an helpful response to the user query.
+PROMPTS[
+    "generate_response_query_with_references"
+] = """You are a helpful assistant analyzing the given input data to provide an helpful response to the user query.
 
 # INPUT DATA
 {context}
@@ -152,7 +160,9 @@ Follow these steps:
 Answer:
 """
 
-PROMPTS["generate_response_query_no_references"] = """You are a helpful assistant analyzing the given input data to provide an helpful response to the user query.
+PROMPTS[
+    "generate_response_query_no_references"
+] = """You are a helpful assistant analyzing the given input data to provide an helpful response to the user query.
 
 # INPUT DATA
 {context}
