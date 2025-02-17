@@ -20,6 +20,8 @@ hnswlib = "^0.8.0"
 instructor = "^1.6.3"
 requests = "^2.32.3"
 python-dotenv = "^1.0.1"
+tiktoken = "^0.8.0"
+aiolimiter = "^1.1.0"
 
 
 [tool.poetry.group.dev.dependencies]

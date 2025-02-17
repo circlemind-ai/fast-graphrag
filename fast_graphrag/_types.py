@@ -130,9 +130,9 @@ class TEntity(BaseModelAlias, BTNode):
         return s
 
     class Model(BaseModelAlias.Model, alias="Entity"):
-        name: str = Field(..., description="Name of the entity")
-        type: str = Field(..., description="Type of the entity")
-        desc: str = Field(..., description="Description of the entity")
+        name: str = Field(..., description="Name of the entity",json_schema_extra={"example": ""})
+        type: str = Field(..., description="Type of the entity",json_schema_extra={"example": ""})
+        desc: str = Field(..., description="Description of the entity",json_schema_extra={"example": ""})
 
         @staticmethod
         def to_dataclass(pydantic: "TEntity.Model") -> "TEntity":
@@ -196,10 +196,10 @@ class TRelation(BaseModelAlias, BTEdge):
             return {}
 
     class Model(BaseModelAlias.Model, alias="Relationship"):
-        source: str = Field(..., description="Name of the source entity")
-        target: str = Field(..., description="Name of the target entity")
+        source: str = Field(..., description="Name of the source entity",json_schema_extra={"example": ""})
+        target: str = Field(..., description="Name of the target entity",json_schema_extra={"example": ""})
         # alternative description "Explanation of why the source entity and the target entity are related to each other"
-        desc: str = Field(..., description="Description of the relationship between the source and target entity")
+        desc: str = Field(..., description="Description of the relationship between the source and target entity",json_schema_extra={"example": ""})
 
         @staticmethod
         def to_dataclass(pydantic: "TRelation.Model") -> "TRelation":
@@ -222,13 +222,13 @@ class TGraph(BaseModelAlias):
     relationships: List[TRelation] = field()
 
     class Model(BaseModelAlias.Model, alias="Graph"):
-        entities: List[TEntity.Model] = Field(description="List of extracted entities")
-        relationships: List[TRelation.Model] = Field(description="Relationships between the entities")
+        entities: List[TEntity.Model] = Field(description="List of extracted entities",json_schema_extra={"example": []})
+        relationships: List[TRelation.Model] = Field(description="Relationships between the entities",json_schema_extra={"example": []})
         other_relationships: List[TRelation.Model] = Field(
             description=(
                 "Other relationships between the extracted entities previously missed"
                 "(likely involving minor/generic entities)"
-            )
+            ),json_schema_extra={"example": []}
         )
 
         @staticmethod
