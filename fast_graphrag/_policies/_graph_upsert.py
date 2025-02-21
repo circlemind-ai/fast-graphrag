@@ -21,18 +21,34 @@ async def summarize_entity_description(
     """Summarize the given entity description."""
     if max_tokens is not None:
         raise NotImplementedError("Summarization with max tokens is not yet supported.")
-    # Prompt
-    entity_description_summarization_prompt = prompt
-
     # Extract entities and relationships
-    formatted_entity_description_summarization_prompt = entity_description_summarization_prompt.format(
-        description=description
-    )
-    new_description, _ = await llm.send_message(
-        prompt=formatted_entity_description_summarization_prompt,
-        response_model=TEntityDescription,
-        max_tokens=max_tokens,
-    )
+    system_key = prompt + '_system'
+    # Split system prompt/initial prompt pair
+    if system_key in PROMPTS:
+        # Use separate system and prompt entries if available.
+        entity_description_summarization_system = PROMPTS[system_key]
+        entity_description_summarization_prompt = PROMPTS[prompt + '_prompt']
+
+        formatted_system = entity_description_summarization_system.format(description=description)
+        formatted_prompt = entity_description_summarization_prompt.format(description=description)
+
+        new_description, _ = await llm.send_message(
+            system_prompt=formatted_system,
+            prompt=formatted_prompt,
+            response_model=TEntityDescription,
+            max_tokens=max_tokens,
+        )
+    else:
+        # Single prompt summarization
+        entity_description_summarization_prompt = PROMPTS[prompt]
+        formatted_entity_description_summarization_prompt = entity_description_summarization_prompt.format(
+            description=description
+        )
+        new_description, _ = await llm.send_message(
+            prompt=formatted_entity_description_summarization_prompt,
+            response_model=TEntityDescription,
+            max_tokens=max_tokens,
+        )
 
     return new_description.description
 
@@ -104,7 +120,7 @@ class NodeUpsertPolicy_SummarizeDescription(BaseNodeUpsertPolicy[TEntity, TId]):
     class Config:
         max_node_description_size: int = field(default=512)
         node_summarization_ratio: float = field(default=0.5)
-        node_summarization_prompt: str = field(default=PROMPTS["summarize_entity_descriptions"])
+        node_summarization_prompt: str = field(default="summarize_entity_descriptions")
         is_async: bool = field(default=True)
 
     config: Config = field(default_factory=Config)
