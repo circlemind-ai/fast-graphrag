@@ -54,7 +54,7 @@ class HNSWVectorStorage(BaseVectorStorage[GTId, GTEmbedding]):
         ), "ids, embeddings, and metadata (if provided) must have the same length"
 
         if self.size + len(embeddings) >= self.max_size:
-            new_size = self.max_size * 2
+            new_size = self.max_size * 2 + 1
             while self.size + len(embeddings) >= new_size:
                 new_size *= 2
             self._index.resize_index(new_size)
