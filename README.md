@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/python->=3.10.1-blue">
 </h4>
 <p align="center">
-  <p align="center"><b>Streamlined and promptable Fast GraphRAG framework designed for interpretable, high-precision, agent-driven retrieval workflows. <br> <a href="https://circlemind.co/"> Looking for a Managed Service? » </a> </b> </p>
+  <p align="center"><b>Streamlined and promptable Fast GraphRAG framework designed for interpretable, high-precision, agent-driven retrieval workflows. </b> </p>
 </p>
 
 <h4 align="center">
@@ -27,11 +27,6 @@
 
 > [!NOTE]
 > Using *The Wizard of Oz*, `fast-graphrag` costs $0.08 vs. `graphrag` $0.48 — **a 6x costs saving** that further improves with data size and number of insertions.
-
-## News (and Coming Soon)
-- [ ] Support for IDF weightening of entities
-- [x] Support for generic entities and concepts (initial commit)
-- [x] [2024.12.02] Benchmarks comparing Fast GraphRAG to LightRAG, GraphRAG and VectorDBs released [here](https://github.com/circlemind-ai/fast-graphrag/blob/main/benchmarks/README.md)
 
 ## Features
 
