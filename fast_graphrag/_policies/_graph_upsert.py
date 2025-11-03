@@ -36,7 +36,6 @@ async def summarize_entity_description(
             system_prompt=formatted_system,
             prompt=formatted_prompt,
             response_model=TEntityDescription,
-            max_tokens=max_tokens,
         )
     else:
         # Single prompt summarization
@@ -47,7 +46,6 @@ async def summarize_entity_description(
         new_description, _ = await llm.send_message(
             prompt=formatted_entity_description_summarization_prompt,
             response_model=TEntityDescription,
-            max_tokens=max_tokens,
         )
 
     return new_description.description
