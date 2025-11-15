@@ -70,29 +70,55 @@ class IGraphStorage(BaseGraphStorage[GTNode, GTEdge, GTId]):
     async def _get_edge_indices(
         self, source_node: Union[GTId, TIndex], target_node: Union[GTId, TIndex]
     ) -> Iterable[TIndex]:
-        if type(source_node) is TIndex:
-            source_node = self._graph.vs.find(name=source_node).index  # type: ignore
-        if type(target_node) is TIndex:
-            target_node = self._graph.vs.find(name=target_node).index  # type: ignore
-        edges = self._graph.es.select(_source=source_node, _target=target_node)  # type: ignore
-
-        return (edge.index for edge in edges)  # type: ignore
+        try:
+            # Convert node names to indices
+            if type(source_node) is not TIndex:
+                try:
+                    source_node = self._graph.vs.find(name=source_node).index  # type: ignore
+                except ValueError:
+                    logger.warning(f"(get_edge_indices) Source node doesn't exist: {source_node}")
+                    return []  # Node doesn't exist, no edges possible
+            if type(target_node) is not TIndex:
+                try:
+                    target_node = self._graph.vs.find(name=target_node).index  # type: ignore
+                except ValueError:
+                    logger.warning(f"(get_edge_indices) Target node doesn't exist: {target_node}")
+                    return []  # Node doesn't exist, no edges possible
+                    
+            # Validate indices
+            if (source_node >= self._graph.vcount() or target_node >= self._graph.vcount()):  # type: ignore
+                logger.warning(f"Invalid vertex indices: source={source_node}, target={target_node}, vcount={self._graph.vcount()}")
+                return []
+                
+            edges = self._graph.es.select(_source=source_node, _target=target_node)  # type: ignore
+            return (edge.index for edge in edges)  # type: ignore
+        except Exception as e:
+            logger.error(f"Error getting edge indices for nodes {source_node}, {target_node}: {e}")
+            return []
 
     async def get_node_by_index(self, index: TIndex) -> Union[GTNode, None]:
         node = self._graph.vs[index] if index < self._graph.vcount() else None  # type: ignore
         return self.config.node_cls(**node.attributes()) if index < self._graph.vcount() else None  # type: ignore
 
     async def get_edge_by_index(self, index: TIndex) -> Union[GTEdge, None]:
-        edge = self._graph.es[index] if index < self._graph.ecount() else None  # type: ignore
-        return (
-            self.config.edge_cls(
+        try:
+            edge = self._graph.es[index] if index < self._graph.ecount() else None  # type: ignore
+            if not edge:
+                return None
+                
+            # Validate source and target vertex indices
+            if (edge.source >= self._graph.vcount() or edge.target >= self._graph.vcount()):  # type: ignore
+                logger.error(f"Edge {index} has invalid vertex indices: source={edge.source}, target={edge.target}, vcount={self._graph.vcount()}")
+                return None
+                
+            return self.config.edge_cls(
                 source=self._graph.vs[edge.source]["name"],  # type: ignore
                 target=self._graph.vs[edge.target]["name"],  # type: ignore
                 **edge.attributes(),  # type: ignore
             )
-            if edge
-            else None
-        )
+        except Exception as e:
+            logger.error(f"Error getting edge by index {index}: {e}")
+            return None
 
     async def upsert_node(self, node: GTNode, node_index: Union[TIndex, None]) -> TIndex:
         if node_index is not None:
@@ -109,20 +135,44 @@ class IGraphStorage(BaseGraphStorage[GTNode, GTEdge, GTId]):
             return self._graph.add_vertex(**asdict(node)).index  # type: ignore
 
     async def upsert_edge(self, edge: GTEdge, edge_index: Union[TIndex, None]) -> TIndex:
-        if edge_index is not None:
-            if edge_index >= self._graph.ecount():  # type: ignore
-                logger.error(
-                    f"Trying to update edge with index {edge_index} but graph has only {self._graph.ecount()} edges."  # type: ignore
-                )
-                raise ValueError(f"Index {edge_index} is out of bounds")
-            already_edge = self._graph.es[edge_index]  # type: ignore
-            already_edge.update_attributes(**edge.to_attrs(edge=edge))  # type: ignore
+        try:
+            if edge_index is not None:
+                if edge_index >= self._graph.ecount():  # type: ignore
+                    logger.error(
+                        f"Trying to update edge with index {edge_index} but graph has only {self._graph.ecount()} edges."  # type: ignore
+                    )
+                    raise ValueError(f"Index {edge_index} is out of bounds")
+                already_edge = self._graph.es[edge_index]  # type: ignore
+                already_edge.update_attributes(**edge.to_attrs(edge=edge))  # type: ignore
 
-            return already_edge.index  # type: ignore
-        else:
-            return self._graph.add_edge(  # type: ignore
-                **asdict(edge)
-            ).index  # type: ignore
+                return already_edge.index  # type: ignore
+            else:
+                # Ensure source and target nodes exist before adding edge
+                source_name = edge.source
+                target_name = edge.target
+
+                # Check if source node exists, create if not
+                try:
+                    self._graph.vs.find(name=source_name)  # type: ignore
+                except ValueError:
+                    # Source node doesn't exist, create it
+                    logger.warning(f"(upsert_edge) Source node doesn't exist, creating it: {source_name}")
+                    self._graph.add_vertex(name=source_name)  # type: ignore
+
+                # Check if target node exists, create if not
+                try:
+                    self._graph.vs.find(name=target_name)  # type: ignore
+                except ValueError:
+                    # Target node doesn't exist, create it
+                    logger.warning(f"(upsert_edge) Target node doesn't exist, creating it: {target_name}")
+                    self._graph.add_vertex(name=target_name)  # type: ignore
+
+                return self._graph.add_edge(  # type: ignore
+                    **asdict(edge)
+                ).index  # type: ignore
+        except Exception as e:
+            logger.error(f"Error upserting edge {edge}: {e}")
+            raise
 
     async def insert_edges(
         self,
@@ -130,37 +180,97 @@ class IGraphStorage(BaseGraphStorage[GTNode, GTEdge, GTId]):
         indices: Optional[Iterable[Tuple[TIndex, TIndex]]] = None,
         attrs: Optional[Mapping[str, Sequence[Any]]] = None,
     ) -> List[TIndex]:
-        if indices is not None:
-            assert edges is None, "Cannot provide both indices and edges."
+        try:
+            if indices is not None:
+                assert edges is None, "Cannot provide both indices and edges."
 
-            indices = list(indices)
-            if len(indices) == 0:
+                indices = list(indices)
+                if len(indices) == 0:
+                    return []
+
+                # Validate that all node indices exist
+                valid_indices = []
+                for source_idx, target_idx in indices:
+                    if (source_idx < self._graph.vcount() and target_idx < self._graph.vcount()):  # type: ignore
+                        valid_indices.append((source_idx, target_idx))
+                    else:
+                        logger.warning(f"(insert_edges) Skipping edge ({source_idx}, {target_idx}) - nodes don't exist")
+
+                if len(valid_indices) == 0:
+                    return []
+
+                self._graph.add_edges(  # type: ignore
+                    valid_indices,
+                    attributes=attrs,
+                )
+                # TODO: not sure if this is the best way to get the indices of the new edges
+                return list(range(self._graph.ecount() - len(valid_indices), self._graph.ecount()))  # type: ignore
+            elif edges is not None:
+                assert indices is None and attrs is None, "Cannot provide both indices and edges."
+                edges = list(edges)
+                if len(edges) == 0:
+                    return []
+
+                # Ensure all source and target nodes exist before adding edges
+                for edge in edges:
+                    source_name = edge.source
+                    target_name = edge.target
+
+                    # Check if source node exists, create if not
+                    try:
+                        self._graph.vs.find(name=source_name)  # type: ignore
+                    except ValueError:
+                        logger.warning(f"(insert_edges) Source node doesn't exist, creating it: {source_name}")
+                        self._graph.add_vertex(name=source_name)  # type: ignore
+
+                    # Check if target node exists, create if not
+                    try:
+                        self._graph.vs.find(name=target_name)  # type: ignore
+                    except ValueError:
+                        logger.warning(f"(insert_edges) Target node doesn't exist, creating it: {target_name}")
+                        self._graph.add_vertex(name=target_name)  # type: ignore
+
+                self._graph.add_edges(  # type: ignore
+                    ((edge.source, edge.target) for edge in edges),
+                    attributes=type(edges[0]).to_attrs(edges=edges),
+                )
+                # TODO: not sure if this is the best way to get the indices of the new edges
+                return list(range(self._graph.ecount() - len(edges), self._graph.ecount()))  # type: ignore
+            else:
                 return []
-            self._graph.add_edges(  # type: ignore
-                indices,
-                attributes=attrs,
-            )
-            # TODO: not sure if this is the best way to get the indices of the new edges
-            return list(range(self._graph.ecount() - len(indices), self._graph.ecount()))  # type: ignore
-        elif edges is not None:
-            assert indices is None and attrs is None, "Cannot provide both indices and edges."
-            edges = list(edges)
-            if len(edges) == 0:
-                return []
-            self._graph.add_edges(  # type: ignore
-                ((edge.source, edge.target) for edge in edges),
-                attributes=type(edges[0]).to_attrs(edges=edges),
-            )
-            # TODO: not sure if this is the best way to get the indices of the new edges
-            return list(range(self._graph.ecount() - len(edges), self._graph.ecount()))  # type: ignore
-        else:
+        except Exception as e:
+            logger.error(f"Error inserting edges: {e}")
             return []
 
     async def are_neighbours(self, source_node: Union[GTId, TIndex], target_node: Union[GTId, TIndex]) -> bool:
-        return self._graph.get_eid(source_node, target_node, directed=False, error=False) != -1  # type: ignore
+        try:
+            # Convert node names to indices and handle non-existent nodes
+            if type(source_node) is not TIndex:
+                try:
+                    source_node = self._graph.vs.find(name=source_node).index  # type: ignore
+                except ValueError:
+                    return False  # Node doesn't exist, can't be neighbours
+            if type(target_node) is not TIndex:
+                try:
+                    target_node = self._graph.vs.find(name=target_node).index  # type: ignore
+                except ValueError:
+                    return False  # Node doesn't exist, can't be neighbours
+
+            # Check if indices are valid (within current node count)
+            if source_node >= self._graph.vcount() or target_node >= self._graph.vcount():  # type: ignore
+                return False
+            return self._graph.get_eid(source_node, target_node, directed=False, error=False) != -1  # type: ignore
+        except Exception as e:
+            logger.error(f"Error checking if nodes are neighbours {source_node}, {target_node}: {e}")
+            return False
 
     async def delete_edges_by_index(self, indices: Iterable[TIndex]) -> None:
-        self._graph.delete_edges(indices)  # type: ignore
+        try:
+            valid_indices = [idx for idx in indices if idx < self._graph.ecount()]  # type: ignore
+            if valid_indices:
+                self._graph.delete_edges(valid_indices)  # type: ignore
+        except Exception as e:
+            logger.error(f"Error deleting edges by index: {e}")
 
     async def score_nodes(self, initial_weights: Optional[csr_matrix]) -> csr_matrix:
         if self._graph.vcount() == 0:  # type: ignore
